@@ -25,6 +25,7 @@
 - [部署](#部署)
   - [本机直跑](#本机直跑)
   - [Docker](#docker)
+  - [发布镜像版本](#发布镜像版本)
   - [反向代理](#反向代理)
 - [安全边界](#安全边界)
 - [常见问题](#常见问题)
@@ -209,6 +210,39 @@ docker run -d --name codearts2api \
 
 反代**不碰 `Authorization`**：客户端仍须带网关的 Bearer Key，鉴权判定权始终只在插件
 网关一处，不存在两套鉴权。
+
+#### 发布镜像版本
+
+镜像由 GitHub Actions 构建并推到 `ghcr.io/heatonz/codearts2api`，**按触发方式分两种**：
+
+| 触发方式 | 推出的标签 |
+|---|---|
+| 推送 `v` 开头的 tag（如 `v1.2.3`） | `:1.2.3`（不可变，部署端钉它） |
+| 推送分支 / 手动触发 | `:latest` + `:<commit>` |
+
+发布一个版本：
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+推送后看 [Actions](https://github.com/HeatonZ/codearts2api/actions) 的 `Build and Push to GHCR`
+跑完（约 2 分钟），再确认真实标签已存在：
+
+```bash
+gh api users/HeatonZ/packages/container/codearts2api/versions \
+  --jq '.[].metadata.container.tags'
+```
+
+部署端把 compose 里的 `:latest` 换成具体版本，即可钉住：
+
+```yaml
+image: ghcr.io/heatonz/codearts2api:1.2.3
+```
+
+> 💡 `:latest` 指向最近一次构建，**不管它来自哪个提交**；要复现某个状态就用版本号或 commit 标签。
+> 上游本身没有 tag / release 发布流，本项目 fork 的 `main` 与 `v*` 是独立维护的。
 
 ### 反向代理
 
