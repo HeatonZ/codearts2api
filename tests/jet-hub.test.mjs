@@ -223,29 +223,29 @@ test("供应商级开关：一键关闭与打开", async (t) => {
   assert.equal(status.ok, true)
   assert.ok(status.value.statuses.codearts.models.total > 0)
 
-  // ⚠️ 关闭方向的判据在上游 2026-10-12（`bea8a1b`）**放宽**了：只拒绝「远端读失败」。
+  // ⚠️ 两个写黑名单的端点**刻意用不同判据**（上游 2026-10-13 明确分工，别「顺手统一」）：
   //
-  // 224bdfa 那轮把两个写黑名单的端点统一收敛到 `complete`（远端读到**且非空**），
-  // 副作用是**任何账号都没有的供应商永远无法关闭**：远端目录按**已登录账号**门控，
-  // 无账号时 `createModelCatalog` 返回 `[]` —— 那是**读成功但为空**
-  // （`remoteError === undefined`），却被与「读失败」一并拒绝，用户看到「开关点得动、
-  // 点了必报错、状态又永远回到已关闭」。
+  // | 端点 | 判据 | 目录不完整时 |
+  // | --- | --- | --- |
+  // | `model.setAllDisabled`（模型级批量） | `catalog.complete` | **拒绝**、不落盘 |
+  // | `provider.setEnabled`（供应商级） | `catalog.remoteError` | 读**失败**才拒绝；读到但为空**照常关闭** |
   //
-  // 现在 `provider.setEnabled` 判 `remoteError`：**读失败**才拒绝且不落盘；「读到但
-  // 为空」则用兜底表并集照常关闭（无账号 ⇒ 模型选择器里本来一条都选不到，不会出现
-  // 「显示已关闭而模型仍可选」）。`model.setAllDisabled` 仍判 `complete`（模型级批量
-  // 操作语义上要求目录完整，且无账号时其入口弹窗里没有可操作对象）。
+  // 理由是：**「远端读到但为空」正是「该供应商没有账号」的正常状态**，此时模型
+  // 选择器里本就一条都选不到，用适配器兜底表落盘是自洽的；若也按 `complete`
+  // 拒绝，**无账号的供应商将永远无法关闭**。
   //
-  // 本例没有真实账号 ⇒ 命中「读到但为空」⇒ **应关闭成功**。
+  // ⚠️ 本用例没有真实账号，恰好命中「读到但为空」⇒ **应关闭成功**。
+  //    这与 2026-10-11 那版行为不同（当时判 `complete` 而拒绝）——
+  //    那是我方把模型级的判据错套到了供应商级上，现按上游语义订正。
   const closed = await rpc(app.origin, "provider.setEnabled", { provider: "codearts", enabled: false })
-  assert.equal(closed.ok, true, `无账号门控时应可关闭：${JSON.stringify(closed)}`)
-  assert.ok(closed.value.models > 0, "应报告关闭了多少个模型")
+  assert.equal(closed.ok, true, `无账号供应商应能关闭：${JSON.stringify(closed)}`)
+  assert.ok(closed.value.models > 0, "应实际写入黑名单（兜底表），而不是静默空操作")
 
-  // ⚠️ 关键断言：关闭必须**落盘并反映到状态**，不能出现「关完开关又弹回」。
+  // 关闭后状态自洽：显示已关闭，且黑名单确实覆盖了当前全部目录。
   const afterClose = await rpc(app.origin, "provider.status", { providers: ["codearts"] })
-  assert.equal(afterClose.value.statuses.codearts.closed, true, "关闭后状态应为已关闭")
+  assert.equal(afterClose.value.statuses.codearts.closed, true, "应显示为整体关闭")
 
-  // 打开方向不受目录完整性限制（只清空黑名单），应始终成功 —— 且幂等。
+  // 打开方向只清黑名单，应始终成功 —— 且把状态恢复为打开。
   const opened = await rpc(app.origin, "provider.setEnabled", { provider: "codearts", enabled: true })
   assert.equal(opened.ok, true, `打开供应商应成功：${JSON.stringify(opened)}`)
   const afterOpen = await rpc(app.origin, "provider.status", { providers: ["codearts"] })

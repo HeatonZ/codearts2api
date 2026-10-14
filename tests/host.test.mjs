@@ -10,7 +10,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { startTestApp, rpc } from "./helpers.mjs"
 
-/** 期望注册的 provider（14 个渠道 + aggregate / jet-hub-auto 两条聚合路由）。 */
+/** 期望注册的 provider（16 个渠道 + aggregate / jet-hub-auto 两条聚合路由）。 */
 const EXPECTED_PROVIDERS = [
   "codearts",
   "buddy",
@@ -24,7 +24,15 @@ const EXPECTED_PROVIDERS = [
   "raccoon",
   "minimax",
   "gemini",
+  // 上游 2026-10-14 新增：Accio（阿里）。⚠️ 它紧跟 gemini、在 zcode **之前**。
+  "accio",
   "zcode",
+  // 上游 2026-10-13 新增：电脑果办（OfficeAce）。⚠️ 它紧跟 zcode、在 opencode **之前**。
+  //
+  // ⚠️ 这几家的相对顺序（gemini → accio → zcode → officeace → opencode）**与
+  //    `src/provider-registry.ts` 里的声明顺序不同** —— 断言比的是**适配器注册顺序**
+  //    （`index.ts` 里 `registerXxxLlm` 的调用序）。别照注册表抄，会让测试红。
+  "officeace",
   "opencode",
   // 上游 2026-10-08 升级新增：同一模型跨渠道归一化、按额度临期排序并失败切换。
   "aggregate",
