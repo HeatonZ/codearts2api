@@ -52,6 +52,28 @@
 （`officeace` 上一轮的注释说它「在 zcode 与 opencode 之间」，本轮 `accio` 插进来后
 它前面变成了 `zcode`、后面仍是 `opencode` —— 注释已随之更新。）
 
+### 本仓库实跑发现：上游 `officeace` 批量续期有缺陷（**上游问题，未在 fork 侧修补**）
+
+本仓库启动实测（无账号的空池也会走到）打出：
+
+```
+WARN [jet-hub] officeace 批量续期失败：p.listAccountsByProvider(...).catch is not a function
+```
+
+根因在上游 `src/index.ts`（`officeace` 的 `refreshAll` 外壳）：
+
+- 代码写 `await p.listAccountsByProvider('officeace').catch(() => [])`
+- 但 `src/account-pool.ts` 的 `listAccountsByProvider()` 是**同步**返回数组，
+  数组**没有** `.catch` ⇒ 一进这条路径就抛 `TypeError`
+
+**影响范围**：只波及 `officeace` 一个渠道的批量续期（每 30 分钟一轮 + 启动首轮都报）。
+其他 15 个渠道的续期不受影响（`refreshAllCredentials` 对单个 provider 抛错做了隔离）。
+**上游后续 7 个提交（至 `01e05d1`）未修这一行。**
+
+**为何不在 fork 侧打补丁**：本项目是**薄胶水**，产品代码 0 行是核心特色；给单渠道
+续期加 workaround 会形成「长期跟随上游漂移的分叉」，收益（一个我们还没账号的渠道）
+远大于成本。已在回执中告知用户，由用户决定是否向上游反馈。
+
 > 💡 又见「薄胶水」：上游 98 个文件、+17436 行，新增一个完整渠道 ——
 > 本仓库的**产品代码仍是 0 行**，只更新了两处**测试期望**。
 
