@@ -7,56 +7,51 @@
 ---
 
 <details open>
-<summary><b>2026-10-16 · 上游升级到 <code>0225f08</code>（新增 MiniMax Code 国际版 + 上游更名 <code>dsh-providers-hub</code>）</b></summary>
+<summary><b>2026-10-16 · 上游升级到 <code>0225f08</code>（新增 MiniMax Code 国际版）</b></summary>
 
-上游增量：**46 个提交**（`50023bc` → `0225f08`，含分支合并，其中无合并提交 32 个）、
-150 个文件、+20191 / −2153 行。版本 `0.2.0-rc.10` → **`0.2.0-rc.11`**。
+上游增量：**14 个提交**（`023de5f` → `0225f08`，含 4 个合并提交，其中无合并提交 10 个）、
+64 个文件、+4766 / −1343 行。版本仍是 `0.2.0-rc.11`。
 
 ### 上游变化
 
-这一轮的头部是**包改名**与**一条新渠道**，其余多为逐条审计整改。
+这一轮**只有一条新渠道是功能增量**，其余是渠道加固与文档/断言纠偏。
 
-- **包更名 `dsh-codearts-auth` → `dsh-providers-hub`**（`828037d`）。⚠️ 紧接着就补了一条
-  真事故修复：客户端 bundle 的**注册 id 漏跟包名改**（`2350a4d`），
-  `2d8deab`（IKLUME）又把它升级成**安装期闸门 + 行为判据** —— 因为 DSH 按包名物化客户端
-  条目，id 与包名不一致会让**整个插件装不进桌面端**（会被隔离进恢复模式）。
-  上游为此把「身份三载体（`package.json` name / `PLUGIN_ID` / `cordis.patch.yml` 的
-  `name:`）+ 产物里真正写进去的 id」抽成一份自检，并在 `build.mjs` 里**无条件调用**。
-- **新增第 17 个渠道：MiniMax Code 国际版（`minimaxintl`）**（`63f08f4`，PR103）。
+- **新增第 17 个渠道：MiniMax Code 国际版（`minimaxintl`）**（`63f08f4` + 复审 `0f9022d`，PR103）。
   它与中国版**共用同一套 `src/minimax*.ts` 实现**，差异全在 `MINIMAX_INTL` 配置
   （主机 `account.minimax.io` / `agent.minimax.io`、目录 region `en`、凭据 ref 前缀
-  `MINIMAXINTL_`）。两站**账号不互通、API 主机不同**，故是两个 provider 而非一个 provider
-  加站点参数。同批还加了 **minimax 传输级重试**。
-- **buddy `X-Conversation-*` 三头**（`b554b73` → `5fa1195`，PR104）：先按「修 workbuddy 全线
-  400」补三头，**真机复测又把核心结论证伪**，最终以整改后的结论落地。
-- **渠道原生搜索**（`32b6420` 等，PR95）：buddy / workbuddy 接入原生搜索 + Jet Hub 总开关；
-  qoder 补 `QoderEncryptedInfer.prepareRequest` 通用端点签名并接入搜索
-  （`99e1483`/`5fd128e`）。⚠️ 同批**撤掉了 `web_fetch` 接管**（实测是净损失，只留
-  `web_search`，`58ae086`）。
-- **OfficeAce 加固**：批量续期把同步账号池当 Promise（`4e534e0`，IKLPTZ）、
-  哑锁 + 401 归因/熔断 + 两轮审计整改（`a34f29f`，IKLTHB）、上下文窗口按真机取证逐项改正
-  （`83ced0d`，IKM3A0）。
-- **OpenCode V2 协议适配**（`d77b199`/`611c691`/`c2a7fef`，PR99）：门禁工具调用改为
-  「剔除而非整轮报错」，且**只保留 `read`**；新增独立 `opencode-stream.ts`。
-- 其余：Accio 图片通路接线（`9e3dfb4`，IKLR7V）、tool-result 内层图片静默丢弃
-  （`c046c41`，IKLSB8）、空名工具调用两条入口硬 400 改剔除（`b83ac16`，IKLRIK）、
-  档位数组按强度序声明（`e2fec4f`，IKLIDV）、buddy 身份句指纹（`2249dd9`，IKLS2L）、
-  候选被限流筛空时误报「积分都已用尽」（`3703ef9`/`a5fff95`）、loomy 额度冷却终点改
-  UTC+8 当日 24:00（`2945203`，IKL80H）、聚合轮换名单补 accio/officeace 并加名单守卫
-  （`cd05722`，PR101）。⚠️ 关于 `reasoning_effort`：上一轮我们记的「workbuddy 一律不发」
-  被**上游撤回**（`e261cd6`）—— 真机复测证明它是该渠道的**思考开关**（`1361706`）。
+  `MINIMAXINTL_`；product 只差 6 个字段）。两站**账号不互通、API 主机不同**，故是两个
+  provider 而非一个 provider 加站点参数。同批还加了 **minimax 传输级重试** —— 真机报到
+  `fetch failed`，根因是 `self-signed certificate in certificate chain`（同一凭据连打 10 次
+  签到端点只成功 5 次）。复审补了 5 处零守卫并修 6 处文档失实。
+- **buddy / workbuddy `X-Conversation-*` 三头**（`b554b73` → `5fa1195`，PR104）：先按
+  「修 workbuddy 全线 400 / 11128」补三头，**真机约 90 次请求复测又把核心结论证伪**
+  （剥三头 15/15 成功，与带三头完全一致），最终以「三头非准入必要」的整改结论落地，
+  并补 `buddy-growth` 与逐 provider 点名用例。
+- **loomy 额度冷却终点改为 UTC+8 当日 24:00**（`2945203`，IKL80H）：原先记的是
+  「撞墙时刻 + 24h」滑动窗口，23:50 烧光额度会把解禁时刻落到**次日 23:50** —— 跨过 0 点
+  上游已经放行，插件仍报「可用账号均在限流中」并把同一时刻显示在面板上。
+- **OfficeAce 上下文窗口**（`83ced0d`，IKM3A0）：初版这一列**没有任何实测依据**（GLM 三行与
+  CodeArts 表逐字相同、`deepseek-v4.1-flash` 查无出处），真机取证后逐项改正 —— 实测上限
+  `1_048_576`，初版小 **5.3 倍**，症状不是报错而是**静默降级**（0.8× 阈值提前压缩，
+  1M 能力永远吃不到）。
+- **聚合「两个 Auto」澄清与名单守卫**（`1f47685` + `76e1e03`，PR101）：轮换名单七家 → 九家
+  （补 accio / officeace），点明真正决定候选表可见性的是 `WIRED_EXPIRY_PROVIDERS` 而非
+  `AGGREGATE_CHANNELS`（只加后者是静默失效，该陷阱已复发三次）；新增「模型选择器里为什么
+  有两个 Auto」一节；复审再修正 4 处失实断言、补齐 5 处过期名单并加名单守卫。
+- ⚠️ **`reasoning_effort` 的结论被上游翻盘**：10-14 那条记的「workbuddy 一律不发」已被
+  **撤回**（`e261cd6`）—— 真机复测证明它是该渠道的**思考开关**（`1361706`），不发等于
+  把思考关掉。
 
 ### 本仓库改动与验证
 
-| 项           | 结果                                                                                                                                  |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 依赖锁定     | `package.json` 与 `package-lock.json` 指向 `0225f08ae6db4b5b2e8d3df71061c9660dee0ddb`                                                 |
-| 包名         | 依赖键仍是 `dsh-codearts-auth`（改上游 `name` 会牵动 import 路径与构建，本轮未动）；lock 里上游 `name` 已随之变为 `dsh-providers-hub` |
-| 契约核对     | 端点路径 / 端点名 / `inject` **均未变**；渠道集合**新增 `minimaxintl`**                                                               |
-| **产品代码** | **0 行**；前端产物由 `npm run build` 重建                                                                                             |
-| 行为测试     | **22/22 通过**；lint 与 `prettier --check . --end-of-line auto` 通过                                                                  |
-| 启动验证     | 契约核对通过；**19 条 provider 路由**（17 渠道 + 2 条聚合路由）；`/admin` 200；`/healthz` 正常                                        |
-| 真机验证     | 未做（本轮无新增账号需求）；沿用上一轮结论                                                                                            |
+| 项           | 结果                                                                                                                 |
+| ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| 依赖锁定     | `package.json` 与 `package-lock.json` 从 `023de5f` 更新到 `0225f08ae6db4b5b2e8d3df71061c9660dee0ddb`，同步更新锁文件 |
+| 契约核对     | 端点路径 / 端点名 / `inject` **均未变**；渠道集合**新增 `minimaxintl`**                                              |
+| **产品代码** | **0 行**；前端产物由 `npm run build` 重建                                                                            |
+| 行为测试     | **22/22 通过**；lint 与 `prettier --check . --end-of-line auto` 通过                                                 |
+| 启动验证     | 契约核对通过；**19 条 provider 路由**（17 渠道 + 2 条聚合路由）；`/admin` 200；`/healthz` 正常                       |
+| 真机验证     | 未做（本轮无新增账号需求）；沿用上一轮结论                                                                           |
 
 改动文件：`package.json`、`package-lock.json`、`tests/host.test.mjs`、
 `tests/admin-ui.test.mjs`、`README.md`、`CHANGELOG.md`。
@@ -70,12 +65,35 @@
 `MiniMax Code (国际版)`。此前只写 `includes("MiniMax Code")`，**两站都命中**，
 国际版被删也不会红 —— 已改为两条独立断言。
 
-> 💡 又见「薄胶水」：上游 150 个文件、+20191 行，新增一条渠道并改名了一个包 ——
+> 💡 又见「薄胶水」：上游这一轮 64 个文件、+4766 行，新增一条渠道并把国内站改了名 ——
 > 本仓库的**产品代码仍是 0 行**，只更新了**测试期望**与文档。
 
 </details>
 
-<details open>
+<details>
+<summary><b>2026-10-15 · 上游升级到 <code>023de5f</code>（0.2.0-rc.11）</b></summary>
+
+依赖从 `50023bc3f462c33be5ea37bda76326fc15bc59b6` 更新到
+`023de5fcd66433efbfcb08003d30e8a4db756c77`，同步更新 npm 锁文件。
+
+### 上游变化
+
+- **OpenCode**：适配 V2 协议与客户端工具别名，剔除门禁工具调用，避免整轮报错。
+- **OfficeAce**：修复批量续期、永久积分锁定执行及 401 归因与熔断。
+- **图片与工具调用**：接通 Accio 逐模型图片能力，修复工具结果内层图片丢失、空名工具调用导致的 400。
+- **原生搜索**：新增 buddy / workbuddy / qoder / qodercn 搜索接线与持久化总开关；该接线依赖 DSH 宿主服务，不代表本独立网关新增搜索接口。
+- **包名**：改为 `dsh-providers-hub`，客户端注册 id 同步跟随；本仓库保留 `dsh-codearts-auth` 依赖别名，现有导入与构建无需修改。
+
+### 本仓库验证
+
+- `npm run build` 通过，管理界面产物已重建。
+- `npm test` **22/22 通过**，包含管理界面渲染、插件装配契约、18 条 provider 路由及网关反代验证。
+- `npm run lint` 与 `npm run format:check` 通过，**产品代码 0 行改动**。
+- 测试使用临时状态目录与独立端口，未使用真实账号进行推理验证。
+
+</details>
+
+<details>
 <summary><b>2026-10-14 · 上游两次升级（<code>b37dbf4</code> → <code>50023bc</code>）+ 新增 Accio 渠道</b></summary>
 
 这一天做了两轮上游升级。
