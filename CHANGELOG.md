@@ -49,7 +49,8 @@
 | 依赖锁定     | `package.json` 与 `package-lock.json` 从 `023de5f` 更新到 `0225f08ae6db4b5b2e8d3df71061c9660dee0ddb`，同步更新锁文件 |
 | 契约核对     | 端点路径 / 端点名 / `inject` **均未变**；渠道集合**新增 `minimaxintl`**                                              |
 | **产品代码** | **0 行**；前端产物由 `npm run build` 重建                                                                            |
-| 行为测试     | **22/22 通过**；lint 与 `prettier --check . --end-of-line auto` 通过                                                 |
+| 行为测试     | **22/22 通过**；`eslint .` 通过                                                                                       |
+| 格式检查     | `prettier --check .` 通过（本仓库 LF 检出；Windows 工作区的 CRLF 会整文件报伪影）                                     |
 | 启动验证     | 契约核对通过；**19 条 provider 路由**（17 渠道 + 2 条聚合路由）；`/admin` 200；`/healthz` 正常                       |
 | 真机验证     | 未做（本轮无新增账号需求）；沿用上一轮结论                                                                           |
 
@@ -290,8 +291,8 @@ WARN [jet-hub] officeace 批量续期失败：p.listAccountsByProvider(...).catc
 
 > 💡 又是「薄胶水」：上游 45 个文件、+8350 行，本仓库产品代码 **0 行**，只有依赖 pin、
 > 一处测试期望跟随上游语义、以及三处被上游变化弄过时的文档说明。
-</details>
 
+</details>
 
 </details>
 
