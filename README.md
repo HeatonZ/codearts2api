@@ -289,7 +289,7 @@ server {
 `ssh -L 19283:127.0.0.1:19283 user@your-server`；③ 打开那个 `loginUrl` 完成授权。
 
 **无需隧道**的渠道：`qoder` / `qodercn` / `cline`（设备码轮询）、`buddy` / `workbuddy`
-（轮询）、`opencode`（可直接粘贴 `sk-` key）。
+（轮询）、`opencode`（可直接粘贴 `sk-` 或新版 `oc_sk_` key）。
 
 **更省事的替代方案**：在本地登录好，再用 `/admin` 的「备份」导出 → 在服务器「恢复」导入。
 导入有两种模式：

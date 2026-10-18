@@ -51,6 +51,13 @@ COPY . .
 # 保证前端与所锁定的上游 commit 一致。
 RUN npm run build
 
+# ── 上游行为修补（构建期，作用于 node_modules 里的上游产物）──
+# OpenCode 的 API key 已从 `sk-` 改成 `oc_sk_` 开头，而上游 opencode-rpc
+# 仍用 `/^sk-[A-Za-z0-9_-]{20,}$/` 做形状校验，导致新 key 无法入库。
+# 脚本是幂等的，且「找不到目标字面量」会直接让构建失败，避免上游改写法后
+# 这个补丁静默失效、把「已修好」变成假象。
+RUN node scripts/patch-upstream.mjs
+
 # ── 运行 ──
 # 本程序自己的状态目录（账号池、凭据、网关 API Key 都在这下面），
 # 挂卷即可持久化；不挂则容器重启后账号会丢。

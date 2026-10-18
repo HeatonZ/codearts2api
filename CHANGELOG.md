@@ -7,6 +7,26 @@
 ---
 
 <details open>
+<summary><b>2026-10-18 · 放开 OpenCode key 的 <code>sk-</code> 前缀校验（支持 <code>oc_sk_</code>）</b></summary>
+
+OpenCode 的 API key 已改为 `oc_sk_` 开头（例：`oc_sk_6ad03dad9d70_n9YpdGWibElciBlnqho_PxFhxFtbmyqI`），
+而上游 `dsh-codearts-auth` 的形状校验仍写死 `/^sk-[A-Za-z0-9_-]{20,}$/`，导致在 `/admin`
+添加账号时直接被判「形状不对」，新 key 根本进不了账号池。
+
+本轮**取消前缀要求**，只保留「字符集 + 至少 20 位」的形状校验（挡手滑与占位符，
+有效性仍由首次真实请求决定），并同步改掉错误文案与前端「形如 sk-…」的提示。
+
+实现方式：`scripts/patch-upstream.mjs` 在镜像构建期（`npm run build` 之后）修补
+`node_modules/dsh-codearts-auth/lib/opencode-rpc.js`。该脚本幂等，且**匹配不到目标
+字面量时让构建直接失败** —— 上游改写法时不会静默退回被拒状态。
+
+验证：新增 `tests/opencode-key.test.mjs`（4 例：`oc_sk_` 放行、`sk-` 仍放行、
+残缺输入仍拒绝、重复 key 复用同一账号），全套 **26/26 通过**、ESLint 通过；
+并用真实进程 + HTTP RPC 实测该 key 成功入库（账号 `opencode-xftbmyqi`）。
+
+</details>
+
+<details open>
 <summary><b>2026-10-18 · 同步上游至 gitee <code>22cc4f8</code>（35 个提交）</b></summary>
 
 本轮将 gitee 业务核心 `iJetLi/deepseek-harness-codearts` 的依赖 pin 从 `510bf91` 更新到 `22cc4f8`，同时合并 GitHub 中间层 `zhuweiyou/codearts2api` 的 `1266165`（该提交已包含于 gitee 提交图）。上游新增 AutoClaw，并含 ModelScope 接入及其后续变更；provider 注册总数由 17 增至 19（新增 ModelScope 和 AutoClaw）。
