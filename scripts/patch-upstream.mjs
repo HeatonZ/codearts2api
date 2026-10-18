@@ -41,10 +41,11 @@ const upstreamRoot = dirname(upstreamPkg)
 const RPC_FILE = join(upstreamRoot, "lib", "opencode-rpc.js")
 const CLIENT_BUNDLE = join(process.cwd(), "public", "upstream-jet-hub.js")
 
-/** 新形状：不限前缀，只要求 20 位以上的 URL-safe 字符。 */
-const NEW_PATTERN_LINE = "const KEY_PATTERN = /^[A-Za-z0-9_-]{20,}$/;"
+/** 新形状：不限前缀，只要求 20 位以上的 URL-safe 字符（分号由原文保留，不要写进来）。 */
+const NEW_PATTERN_BODY = "const KEY_PATTERN = /^[A-Za-z0-9_-]{20,}$/"
+const NEW_PATTERN_LINE = `${NEW_PATTERN_BODY};`
 
-/** 旧正则（上游原始写法），用于断言「确实还停在旧形态」。 */
+/** 旧正则（上游原始写法，不含行尾分号 —— 分号由后面的原样文本保留），用于断言「确实还停在旧形态」。 */
 const OLD_PATTERN_RE = /const KEY_PATTERN = \/\^sk-\[A-Za-z0-9_-\]\{20,\}\$\//
 
 /** 旧错误文案片段 → 新文案。 */
@@ -68,7 +69,7 @@ function patchRpcFile() {
     )
   }
 
-  let after = before.replace(OLD_PATTERN_RE, NEW_PATTERN_LINE)
+  let after = before.replace(OLD_PATTERN_RE, NEW_PATTERN_BODY)
   if (after.includes(OLD_MESSAGE)) {
     after = after.split(OLD_MESSAGE).join(NEW_MESSAGE)
   }
