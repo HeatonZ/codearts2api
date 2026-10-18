@@ -20,9 +20,19 @@ OpenCode 的 API key 已改为 `oc_sk_` 开头（例：`oc_sk_6ad03dad9d70_n9Ypd
 `node_modules/dsh-codearts-auth/lib/opencode-rpc.js`。该脚本幂等，且**匹配不到目标
 字面量时让构建直接失败** —— 上游改写法时不会静默退回被拒状态。
 
-验证：新增 `tests/opencode-key.test.mjs`（4 例：`oc_sk_` 放行、`sk-` 仍放行、
-残缺输入仍拒绝、重复 key 复用同一账号），全套 **26/26 通过**、ESLint 通过；
-并用真实进程 + HTTP RPC 实测该 key 成功入库（账号 `opencode-xftbmyqi`）。
+验证：新增 `tests/opencode-key.test.mjs`（5 例：`oc_sk_` 放行、`sk-` 仍放行、
+残缺输入仍拒绝、重复 key 复用同一账号、尾段含连字符的 key 也能入库），全套 **27/27 通过**、
+ESLint 通过；并用真实进程 + HTTP RPC 实测该 key 成功入库（账号 `opencode-xftbmyqi`）。
+
+**追加修复（同日）**：只放开前缀还不够。上游用 key **尾 8 位**派生凭据名
+`OPENCODE_ACCOUNT_${tail.toUpperCase()}`，而 `@deepseek-ai/dsh-credentials`
+的 `REF_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/` 只收 shell 标识符字符。尾段含 `-`
+的 key（如 `...C9Az-jQD`）会抛
+`credential ref "OPENCODE_ACCOUNT_C9AZ-JQD" must match ...`。
+
+补丁同时把尾段非法字符替换为 `_`，并附加「整把 key 的 4 位哈希」消歧
+（避免 `A-B` 与 `A_B` 撞到同一凭据）；账号 id 仍用原尾段，所以重复 key 复用
+同一账号的行为不变。实测该 key 入库后凭据名为 `OPENCODE_ACCOUNT_C9AZ_JQD_96F4`。
 
 </details>
 

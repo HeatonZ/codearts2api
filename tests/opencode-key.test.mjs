@@ -26,6 +26,33 @@ const OC_KEY = "oc_sk_6ad03dad9d70_n9YpdGWibElciBlnqho_PxFhxFtbmyqI"
 /** 传统 `sk-` 形态仍须放行（老 key 尚在池里）。 */
 const SK_KEY = `sk-${"a".repeat(48)}`
 
+/**
+ * 用户实际踩到的那把 key：尾段 `C9Az-jQD` 含连字符。
+ *
+ * 上游用它派生凭据名 `OPENCODE_ACCOUNT_C9AZ-JQD`，而凭据名只能是 shell
+ * 标识符（`[A-Za-z_][A-Za-z0-9_]*`），于是抛
+ * `credential ref ... must match` —— 这是独立于 `sk-` 前缀的第二个坑。
+ */
+const HYPHEN_TAIL_KEY = "oc_sk_e931bde41a37_D8ijTPYPtvTSEwY_2k21wGluC9Az-jQD"
+
+test("opencode.addAccount 接受尾段带连字符的 key（凭据名净化）", async (t) => {
+  const app = await startTestApp()
+  t.after(() => app.close())
+
+  const result = await rpc(app.origin, "opencode.addAccount", { apiKey: HYPHEN_TAIL_KEY })
+  assert.equal(result?.ok, true, `尾段含 - 的 key 应被接受，实际：${JSON.stringify(result)}`)
+
+  // 凭据名必须能通过 credentials 的 REF_PATTERN（这里顺带核对它真的被净化了）。
+  const listed = await rpc(app.origin, "account.list", { provider: "opencode" })
+  const entry = listed?.value?.accounts?.find((a) => a.id === result.value.accountId)
+  assert.ok(entry, "账号应出现在账号列表")
+  assert.match(
+    entry.credentialRef,
+    /^[A-Za-z_][A-Za-z0-9_]*$/,
+    `凭据名必须是合法标识符，实际：${entry.credentialRef}`,
+  )
+})
+
 test("opencode.addAccount 接受 oc_sk_ 前缀的新 key", async (t) => {
   const app = await startTestApp()
   t.after(() => app.close())
