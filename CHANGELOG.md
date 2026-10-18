@@ -7,6 +7,14 @@
 ---
 
 <details open>
+<summary><b>2026-10-18 · 同步上游至 gitee <code>22cc4f8</code>（35 个提交）</b></summary>
+
+本轮将 gitee 业务核心 `iJetLi/deepseek-harness-codearts` 的依赖 pin 从 `510bf91` 更新到 `22cc4f8`，同时合并 GitHub 中间层 `zhuweiyou/codearts2api` 的 `1266165`（该提交已包含于 gitee 提交图）。上游新增 AutoClaw，并含 ModelScope 接入及其后续变更；provider 注册总数由 17 增至 18（新增 AutoClaw；ModelScope 已在上一版 pin 中）。
+
+</details>
+
+
+<details open>
 <summary><b>2026-10-17 · 直接跟进 gitee 上游 <code>510bf91</code>（跳过 zhuweiyou 中转，28 提交）</b></summary>
 
 本轮按用户指示**跳过 GitHub 上游 `zhuweiyou/codearts2api`**，直接把 `dsh-codearts-auth`
