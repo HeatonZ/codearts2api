@@ -7,6 +7,165 @@
 ---
 
 <details open>
+<summary><b>2026-10-19 · 上游升级到 <code>82da5df</code>（Accio 请求级换号 + Gemini 出口代理）</b></summary>
+
+依赖从 `b0a6409e96181943672c6a65c549964ed50a56be` 更新到
+`82da5df88e90b831a833011b4ce506a934fdb1bc`（版本号仍是 **0.2.1-rc.2** —— 上游这次只发
+commit、没有动 `package.json` 的 version，所以 `@deepseek-ai/dsh-*` 基础包**维持原版本**，
+本仓库不需要换 peer）。
+
+### 上游变化（8 个 commit）
+
+- **Accio（阿里）请求级账号轮换**（IKM3ZV，本次最重要的修复）：402 / 流内 `error_code:402`、
+  429、401/403 现在会**自动切到池内下一个账号**（`ACCIO_MAX_ROTATE = 8`），并按类别写冷却
+  （额度至 UTC+8 当日 24:00、限流 1h、**认证类只换号不写冷却**）。改前整条请求路径**零换号**
+  —— 池里登录 N 个账号也不带来 N 倍可用性。⚠️ 这一项把 `accio` 在
+  `provider-registry.ts` 的 `rateLimit` 从 `false` 翻回 `true`，`probeById` 与
+  `WRITES_RATE_LIMIT_PROVIDERS` 三处同改，因此面板上 Accio 的「重测 / 重置」**从恒为惰性
+  变成真正可用**。
+- **Gemini 出口代理**（IKLTZ2）：Gemini 全部端点都在墙外，而 Node 的 `fetch`（undici）
+  **既不读 Windows 系统代理、也不读 `HTTP(S)_PROXY`** ⇒ 症状是「浏览器授权成功、面板里
+  账号一直不出现」，极易误判成 `client_secret` / `redirect_uri` 配错。上游新增 `gemini-proxy.ts`，
+  账号卡片上多一个**「代理」按钮**（填 `http://…` / `socks5://…` / 带认证的地址，「测试连接」
+  直接打 Google 端点，避免用 ip-api 造出假阳性）；登录、续期、积分、对话四条腿全部走它，
+  探测与聚合折算路径也补上了同一个按账号 fetcher。连不上时提示改成「疑似需要代理 + 根因码」
+  （如 `UND_ERR_CONNECT_TIMEOUT`），不再是裸 `fetch failed`。
+- **Qoder「未开通每日领取」判据重做**（IKJSHK + PR !117 审计整改 P0-1）：改用服务端活动列表
+  三态 + **「本次请求是否真的带上了成对 machine 头」**作第三腿。旧判据在「拿不到 machine 头」
+  的纯插件环境下会把**全部 qoder / qodercn 账号误判为未开通**并渲染成「请先用 Qoder 官方客户端
+  登录一次」；该误报本次修掉。
+- **OpenAI 网关绑定探针显式直连**（IKM3UI）：免疫 `NODE_USE_ENV_PROXY` 等环境代理，避免
+  「本机回环探测被代理带走」。
+- 另有 OpenCode 面板与聚合路由的多处小修（客户端 `opencode-proxy-modal` 增加 Gemini 版弹窗）。
+
+### 本仓库改动与验证
+
+- 只改 `package.json` / `package-lock.json` 的一行依赖（两个文件各一处 `resolved` 同步）；
+  **产品代码 0 行改动**，渠道数量仍是 **19 个渠道 + 1 个聚合面板**，测试期望列表**无需更新**。
+- `npm run build` 重新拷贝上游客户端产物（`public/upstream-jet-hub.js` 已含 `GeminiProxyModal`，
+  与 `node_modules` 里的 `lib/client/jet-hub.js` **哈希一致**）。
+- `npm test` **22/22 通过**；`npm run lint` 通过；`npm run format:check` 通过
+  （见下方「本机行尾」）。
+- `npm start` 启动日志含契约核对行
+  （`上游契约核对通过：/api/jet-hub, /api/jet-hub/captcha-carrier`），端口 8326 被既有实例
+  占用时网关只记 `EADDRINUSE` 并跳过，不影响 `/admin`（文档已写明的已知边界）。
+- 未用真实账号验证新换号策略与 Gemini 代理通路（需要墙外出口与多个 Accio / Gemini 账号）。
+
+### 安装障碍与坑（本次实际踩到）
+
+**① npm 11 的 `allow-scripts` 会把 git 依赖的 `prepare` 打死。**
+本机 `~/.npmrc` 里有 `allow-scripts=true`，而 npm 11.16 的
+`resolveAllowScripts()` 对**项目内**安装会**直接抛错**
+（`EALLOWSCRIPTS: --allow-scripts is not allowed in project-scoped installs`）——
+它把这个配置当成了「命令行传 `--allow-scripts`」。更麻烦的是这条错误发生在
+**上游克隆目录里跑的第二次 npm**（`git dep preparation`），所以外层报的是
+`git dep preparation failed`，看起来像网络或上游的问题。
+
+绕过方式：给这条命令指定一个**不含 `allow-scripts` 的 userconfig**：
+
+```bash
+npm install "dsh-codearts-auth@git+https://gitee.com/iJetLi/deepseek-harness-codearts.git#<commit>" \
+  --include=dev --no-audit --no-fund --userconfig /tmp/clean-npmrc   # 里面只留 registry
+```
+
+清空 `NPM_CONFIG_ALLOW_SCRIPTS` 环境变量**无效**（配置来自 `~/.npmrc`，不是 env）。
+装完后 npm 会警告 `dsh-codearts-auth` 的 `prepare` 与 `esbuild` 的 `install` 脚本
+「not yet covered by allowScripts」—— **但这次构建成功了**，产物时间戳与内容都对得上；
+下次若真被拦住，按提示 `npm approve-scripts <pkg>` 或往 `package.json` 写
+`allowScripts` 字段。
+
+**② `PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` 这次仍要带**（pnpm 11 的新包冷却期，见上一条
+2026-10-18 记录），否则上游克隆目录里的 `pnpm install` 会因它锁文件里的 `0.2.1-rc.2`
+被拒。
+
+**③ 本机行尾漂移会让 `npm run format:check` 假红。**
+Git 的 `core.autocrlf=true` 把工作区若干文件检成了 **CRLF**，而 Prettier 默认
+`endOfLine: "lf"` ⇒ 这 6 个文件（`CHANGELOG.md` / `README.md` / `package.json` /
+`src/server.js` / `tests/admin-ui.test.mjs` / `tests/host.test.mjs`）在**升级前就是红的**，
+与本次升级无关。本次把这 11 个被检成 CRLF 的文件在工作区**统一转回 LF**
+（内容零变化，`git diff` 仍只有依赖两行），`format:check` 随即通过。
+提交内容不受影响（仓库存的是 LF），但**本机检出后**若再次变红，先查
+`git ls-files --eol | Select-String 'w/crlf'`，而不是去改代码。
+
+### 本仓库追加（合并时补齐）
+
+- 上游只写了「依赖一行」；本仓库实际合并的是 zhuweiyou `db497f8`（含 `be0b221` +
+  `db497f8` 两个提交），落点与 gitee master 完全一致（`82da5df` 即 gitee 当前 master，
+  不再需要跳过中间层单独提 pin）。
+- 渠道集合与注册顺序在 `22cc4f8..82da5df` 之间**完全未变**（19 个渠道 + 2 条聚合路由，
+  顺序仍是 `gemini → autoclaw → accio → modelscope → zcode → officeace → opencode`），
+  测试期望无需改动；`tests/admin-ui.test.mjs` 合并时自动并出了重复的 `"AutoClaw"`
+  断言，已清掉（`"AutoClaw (智谱)"` 保留）。
+- **构建期补丁在新 pin 上继续生效**：`scripts/patch-upstream.mjs` 两处修补均打出
+  `pattern: patched; refName: patched`，镜像内实测 `KEY_PATTERN` 为
+  `/^[A-Za-z0-9_-]{20,}$/`、`slotNamesOf` 带 `safeTail` + 4 位哈希。
+- 验证：`npm test` **27/27 通过**、`npx eslint .` 通过；镜像内确认
+  `gemini-proxy.js` 存在（证明 pin 真解析到 `82da5df` 而非旧提交）；
+  用真实进程 + HTTP RPC 复测尾段含连字符的 key，仍能入库且重复添加返回
+  `existed: true`。
+- 产品代码 0 行改动；未部署、未重建任何运行中实例。
+
+</details>
+
+<details>
+<summary><b>2026-10-18 · 同步升级上游与 DSH 基础包（<code>b0a6409</code> / 0.2.1-rc.2）+ 新增 AutoClaw</b></summary>
+
+依赖从 `1266165…`（0.2.0-rc.11）更新到 `b0a6409e96181943672c6a65c549964ed50a56be`
+（**0.2.1-rc.2**）。这次上游**连 DSH 基础包一起升了**，本仓库必须跟着换 ——
+上游把 peer 要求改成了 `^0.2.1-rc.2`，旧的 `0.2.0-rc.2` **已不再被接受**：
+
+| 包                               | 旧版本       | 新版本       |
+| -------------------------------- | ------------ | ------------ |
+| `@deepseek-ai/cordis`            | `4.0.4`      | `4.0.5`      |
+| `@deepseek-ai/dsh-attachment`    | `0.2.0-rc.2` | `0.2.1-rc.2` |
+| `@deepseek-ai/dsh-credentials`   | `0.2.0-rc.2` | `0.2.1-rc.2` |
+| `@deepseek-ai/dsh-llm`           | `0.2.0-rc.2` | `0.2.1-rc.2` |
+| （另有 `-local` 两包同版本跟随） |              |              |
+
+⚠️ `cordis` 是**连带**升级：`0.2.1-rc.2` 的 DSH 包要求 `~4.0.5`，留着 `4.0.4` 会解析失败。
+
+### 上游变化
+
+- **新增 AutoClaw（智谱）渠道**：登录即领积分、1M 上下文模型反代、流水批次展示临期倒计时。
+- **OpenCode / minimax / officeace / buddy**：可达性判据、国际站余额与签到、签到审计、
+  11128 / 11140 分类与按账号换号等多处修复。
+- 客户端多模式弹窗的 `select` 失效改为卡片单选组（覆盖 ZCode / Accio / AutoClaw）。
+
+### ⚠️ 安装障碍：pnpm 11 的「新包冷却期」（本次踩到）
+
+pnpm 11 默认拒绝安装**发布不足 24 小时**的包。上游把它刚发布的 `0.2.1-rc.2`
+写进了**自己的** `pnpm-lock.yaml`，而 npm 拉 git 依赖时会在克隆目录里跑上游的
+`prepare`（`pnpm install` + `pnpm build:all`），于是整体安装失败：
+
+```
+The lockfile contains entries that the active policies reject.
+@deepseek-ai/dsh-llm@0.2.1-rc.2 was published at …, within the minimumReleaseAge cutoff
+```
+
+逐项实测的放行方式（**只有这一种有效**）：
+
+| 写法                                                          | 结果    |
+| ------------------------------------------------------------- | ------- |
+| `PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 npm install …`             | ✅ 生效 |
+| `.npmrc` 里写 `minimum-release-age=0` / `minimumReleaseAge=0` | ❌ 无效 |
+| `npm_config_minimum_release_age=0`（npm_config 前缀）         | ❌ 无效 |
+| 用户级 `~/.npmrc`、全局 pnpm rc                               | ❌ 无效 |
+
+已在 [README 快速开始](README.md#快速开始)与 `Dockerfile` 两处**写明**这条命令及
+失效原因（这是**限时**问题：那批包满 24 小时后裸 `npm install` 自动恢复）。
+
+### 本仓库改动与验证
+
+- 更新 `package.json` 全部 7 项依赖与 `package-lock.json`；渠道集合**新增 `autoclaw`**。
+- 更新测试期望：渠道注册顺序 `gemini → autoclaw → accio → modelscope → zcode`（**19 个渠道
+  - 2 条聚合路由**）；导航 **20 项**，新增独立断言 `AutoClaw (智谱)`。
+- README 渠道数量改 19，并新增 pnpm 冷却期说明；`Dockerfile` 给安装层加放行变量。
+- `npm test` **22/22 通过**；`npm run lint`、`npm run format:check` 与 `git diff --check` 通过。
+- **产品代码 0 行改动**；管理界面产物由 `npm run build` 重建。未用真实账号验证新渠道推理。
+
+</details>
+
+<details>
 <summary><b>2026-10-18 · 放开 OpenCode key 的 <code>sk-</code> 前缀校验（支持 <code>oc_sk_</code>）</b></summary>
 
 OpenCode 的 API key 已改为 `oc_sk_` 开头（例：`oc_sk_6ad03dad9d70_n9YpdGWibElciBlnqho_PxFhxFtbmyqI`），
@@ -36,15 +195,37 @@ ESLint 通过；并用真实进程 + HTTP RPC 实测该 key 成功入库（账�
 
 </details>
 
-<details open>
+<details>
 <summary><b>2026-10-18 · 同步上游至 gitee <code>22cc4f8</code>（35 个提交）</b></summary>
 
 本轮将 gitee 业务核心 `iJetLi/deepseek-harness-codearts` 的依赖 pin 从 `510bf91` 更新到 `22cc4f8`，同时合并 GitHub 中间层 `zhuweiyou/codearts2api` 的 `1266165`（该提交已包含于 gitee 提交图）。上游新增 AutoClaw，并含 ModelScope 接入及其后续变更；provider 注册总数由 17 增至 19（新增 ModelScope 和 AutoClaw）。
 
 </details>
 
+<details>
+<summary><b>2026-10-17 · 上游升级到 <code>1266165</code>（新增 ModelScope）</b></summary>
 
-<details open>
+依赖从 `0225f08ae6db4b5b2e8d3df71061c9660dee0ddb` 更新到
+`1266165baf6cc2918a06ac35a2df472980c89d6e`，版本仍为 `0.2.0-rc.11`。
+
+### 上游变化
+
+- **新增 ModelScope（魔搭）渠道**：访问令牌管理、魔粒余额、聚合轮换、模型黑名单与模型兜底目录。
+- **聚合面板**：三态门控、手工排序、未接入渠道可手动参与，以及面板与选号共享余额缓存。
+- **CodeBuddy**：补偿积分展示与手动领取；完善 11128 / 11140 错误的按账号换号，避免把可用账号误判为渠道不可用。
+- **OfficeAce / Loomy**：修复账号与凭据脱节、无痕换号，以及余额陈旧缓存和错误分类。
+
+### 本仓库改动与验证
+
+- 同步更新依赖声明与 npm 锁文件；DSH 基础包版本保持不变，上游 peer 依赖要求未变。
+- 更新渠道注册顺序及界面导航断言：**18 个渠道 + 2 条聚合路由**；导航 **19 项**，明确断言 `ModelScope (魔搭)`。
+- 更新 README 渠道数量；**产品代码 0 行改动**，管理界面产物由 `npm run build` 重建。
+- `npm test` **22/22 通过**；`npm run lint`、`npm run format:check` 与 `git diff --check` 通过。
+- 隔离状态目录下，插件装配契约、管理界面渲染及网关反代通过；未用真实账号验证新增渠道推理。
+
+</details>
+
+<details>
 <summary><b>2026-10-17 · 直接跟进 gitee 上游 <code>510bf91</code>（跳过 zhuweiyou 中转，28 提交）</b></summary>
 
 本轮按用户指示**跳过 GitHub 上游 `zhuweiyou/codearts2api`**，直接把 `dsh-codearts-auth`
@@ -133,8 +314,7 @@ ESLint 通过；并用真实进程 + HTTP RPC 实测该 key 成功入库（账�
 | 依赖锁定     | `package.json` 与 `package-lock.json` 从 `023de5f` 更新到 `0225f08ae6db4b5b2e8d3df71061c9660dee0ddb`，同步更新锁文件 |
 | 契约核对     | 端点路径 / 端点名 / `inject` **均未变**；渠道集合**新增 `minimaxintl`**                                              |
 | **产品代码** | **0 行**；前端产物由 `npm run build` 重建                                                                            |
-| 行为测试     | **22/22 通过**；`eslint .` 通过                                                                                       |
-| 格式检查     | `prettier --check .` 通过（本仓库 LF 检出；Windows 工作区的 CRLF 会整文件报伪影）                                     |
+| 行为测试     | **22/22 通过**；lint 与 `prettier --check . --end-of-line auto` 通过                                                 |
 | 启动验证     | 契约核对通过；**19 条 provider 路由**（17 渠道 + 2 条聚合路由）；`/admin` 200；`/healthz` 正常                       |
 | 真机验证     | 未做（本轮无新增账号需求）；沿用上一轮结论                                                                           |
 
@@ -239,28 +419,6 @@ ESLint 通过；并用真实进程 + HTTP RPC 实测该 key 成功入库（账�
 改动文件：`package.json`、`package-lock.json`、`tests/host.test.mjs`、
 `tests/admin-ui.test.mjs`、`README.md`。
 
-### 本仓库实跑发现：上游 `officeace` 批量续期有缺陷（**上游问题，未在 fork 侧修补**）
-
-本仓库启动实测（无账号的空池也会走到）打出：
-
-```
-WARN [jet-hub] officeace 批量续期失败：p.listAccountsByProvider(...).catch is not a function
-```
-
-根因在上游 `src/index.ts`（`officeace` 的 `refreshAll` 外壳）：
-
-- 代码写 `await p.listAccountsByProvider('officeace').catch(() => [])`
-- 但 `src/account-pool.ts` 的 `listAccountsByProvider()` 是**同步**返回数组，
-  数组**没有** `.catch` ⇒ 一进这条路径就抛 `TypeError`
-
-**影响范围**：只波及 `officeace` 一个渠道的批量续期（每 30 分钟一轮 + 启动首轮都报）。
-其他 15 个渠道的续期不受影响（`refreshAllCredentials` 对单个 provider 抛错做了隔离）。
-**上游后续 7 个提交（至 `01e05d1`）未修这一行。**
-
-**为何不在 fork 侧打补丁**：本项目是**薄胶水**，产品代码 0 行是核心特色；给单渠道
-续期加 workaround 会形成「长期跟随上游漂移的分叉」，收益（一个我们还没账号的渠道）
-远大于成本。已在回执中告知用户，由用户决定是否向上游反馈。
-
 > 💡 又见「薄胶水」：这两轮共 119 个文件、+20000 行，新增一个完整渠道并改了两处协议 ——
 > 本仓库的**产品代码仍是 0 行**，只更新了两处**测试期望**。
 
@@ -322,61 +480,6 @@ WARN [jet-hub] officeace 批量续期失败：p.listAccountsByProvider(...).catc
 
 > 💡 又见「薄胶水」：上游 98 个文件、+13644 行，新增一个完整渠道（含图片输入与签到）——
 > 本仓库的**产品代码仍是 0 行**，只更新了两处**测试期望**。
-
-<details>
-<summary><b>2026-10-13 · 上游升级到 <code>30e718d</code>（网关监听地址可配 / 无账号供应商可关闭 / cline 与 zcode 修复）</b></summary>
-
-上游增量：**20 个提交**、45 个文件、+8350 / −1212 行（版本号仍是 `0.2.0-rc.10`）。
-
-### 上游变化
-
-- **网关监听地址可配**（`f10d1e5`，Issue IKL7UN）：新增 `DSH_OPENAI_GATEWAY_HOST`，
-  默认值**逐字节不变**（仍是 `127.0.0.1`）。修的是「容器/端口映射下 host 硬编码
-  127.0.0.1 使映射**永不可达**」—— docker-proxy 与同网络容器走容器桥接 IP，那里没有
-  监听 ⇒ 宿主侧只看到 `Connection reset by peer`。同时**显式拒绝通配地址**
-  （`0.0.0.0` / `::` 及 `0`、`0x0` 等 inet_aton 等价写法），否则这条修复本身就是安全倒退。
-- **无账号的供应商不再无法关闭**（`bea8a1b`）：`provider.setEnabled` 关闭方向的判据从
-  `complete`（远端读到**且非空**）**放宽为只拒绝真正的读失败**（`remoteError`）。
-  224bdfa 那轮的收敛有个副作用 —— 远端目录按**已登录账号**门控，无账号时返回 `[]`
-  属「读成功但为空」，却被与「读失败」一并拒绝，于是用户「开关点得动、点了必报错、
-  状态又永远回到已关闭」。`model.setAllDisabled` 仍判 `complete`（模型级批量操作）。
-- **cline**：图片能力改三态（未知不再谎报「不支持」，IKKZUG）、models.dev 拉取健壮化
-  且失败后可自愈、目录健康快照进 `provider.status`、修目录构建的 O(N²)。
-- **zcode**：额度按模型判定（8M = 3M GLM-5.3 + 5M GLM-5.3-Flash）、读上游
-  `skip_model_request` 开关、logid 进诊断行、订正三处失实排查结论。
-- **trae** 缓存命中率恒为 0（上游下发的缓存字段被适配器丢弃）；**model**「关闭全部」
-  在已全关时误报无模型可关 + models 计数少报。
-
-### 本仓库改动
-
-| 项           | 结果                                                                                  |
-| ------------ | ------------------------------------------------------------------------------------- |
-| 依赖锁定     | `package.json` 与 `package-lock.json` 指向 `30e718d30933a53c5c86e22aa7abae938a7db647` |
-| 契约核对     | 端点路径 / 端点名 / `inject` / `./client` 导出路径 **均未变**                         |
-| **产品代码** | **0 行**                                                                              |
-| 行为测试     | **22/22 通过**（Docker 内执行）；lint 通过                                            |
-| 镜像构建     | 通过；`public/admin.js` 217.8kb（生产版产物）                                         |
-
-**顺带修掉一条因上游语义变更而失败的测试**
-
-`jet-hub.test.mjs` 的「供应商级开关」红了：上游 `bea8a1b` 把关闭判据从 `complete`
-放宽为 `remoteError`，而测试环境没有真实账号 ⇒ 命中「读到但为空」⇒ 现在**应该关闭成功**。
-按新语义改为断言「**关闭成功**且**状态随之变为已关闭**」（原来锁的是「拒绝且不落盘」），
-保留打开方向的幂等断言。
-
-**订正因上游变化而过时的文档**
-
-- README「为什么容器里必须开 `PROXY_GATEWAY`」原写「监听地址在上游是**硬编码**的
-  `127.0.0.1`（不可经环境变量修改）」—— 该说法自 `f10d1e5` 起不再成立，已改为
-  「**默认**是 `127.0.0.1`」并补上 `DSH_OPENAI_GATEWAY_HOST` 的存在与通配地址限制，
-  同时说明容器部署**仍建议**用 `PROXY_GATEWAY`（直接暴露网关会扩大暴露面且要写死容器 IP）。
-- README 环境变量表新增 `DSH_OPENAI_GATEWAY_HOST` 一行。
-- Dockerfile 注释同步订正（原先同样写着「硬编码、不可经 env 改」）。
-
-> 💡 又是「薄胶水」：上游 45 个文件、+8350 行，本仓库产品代码 **0 行**，只有依赖 pin、
-> 一处测试期望跟随上游语义、以及三处被上游变化弄过时的文档说明。
-
-</details>
 
 </details>
 

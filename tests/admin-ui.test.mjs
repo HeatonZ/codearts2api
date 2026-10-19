@@ -107,8 +107,8 @@ test("/admin 能渲染出上游 Jet Hub 界面", async (t) => {
     "Gemini Code Assist",
     "OfficeAce",
     "Accio",
+    "AutoClaw (智谱)",
     "ModelScope (魔搭)",
-    "AutoClaw",
     "聚合 (跨渠道)",
   ]) {
     assert.ok(

@@ -28,16 +28,16 @@ const EXPECTED_PROVIDERS = [
   // `minimax` 之后、在 `gemini` **之前**。
   "minimaxintl",
   "gemini",
-  // 上游新增 AutoClaw：适配器注册在 gemini 之后、accio 之前。
+  // 上游 2026-10-18 新增：AutoClaw（智谱）。⚠️ 它紧跟 gemini、在 accio **之前**。
   "autoclaw",
-  // Accio（阿里）注册在 AutoClaw 之后、ModelScope 之前。
+  // 上游 2026-10-14 新增：Accio（阿里）。⚠️ 它在 autoclaw 之后、zcode **之前**。
   "accio",
   // 上游新增 ModelScope（魔搭）：适配器注册在 accio 之后、zcode 之前。
   "modelscope",
   "zcode",
   // 上游 2026-10-13 新增：电脑果办（OfficeAce）。⚠️ 它紧跟 zcode、在 opencode **之前**。
   //
-  // ⚠️ 这几家的相对顺序（gemini → accio → modelscope → zcode → officeace → opencode）**与
+  // ⚠️ 这几家的相对顺序（gemini → autoclaw → accio → modelscope → zcode → officeace → opencode）**与
   //    `src/provider-registry.ts` 里的声明顺序不同** —— 断言比的是**适配器注册顺序**
   //    （`index.ts` 里 `registerXxxLlm` 的调用序）。别照注册表抄，会让测试红。
   "officeace",
