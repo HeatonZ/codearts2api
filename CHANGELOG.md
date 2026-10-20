@@ -7,6 +7,88 @@
 ---
 
 <details open>
+<summary><b>2026-10-20 · 上游升级到 <code>b5dab83</code>（新增 AStudio + 模型目录刷新器）</b></summary>
+
+依赖从 `82da5df88e90b831a833011b4ce506a934fdb1bc` 更新到
+`b5dab839fe04d3a05a331c4a7d6b073a876c71f3`。版本号仍是 **0.2.1-rc.2**、`peerDependencies`
+与 `dependencies` **一字未改**（上游这次纯发 commit），所以 `@deepseek-ai/dsh-*` 基础包
+照旧，本仓库无需换 peer，也无需在 `src/host.js` 里补任何服务。
+
+### 上游变化（43 个 commit，+10627/−184）
+
+- **新增 AStudio（讯飞 astronautStudio）渠道** —— 第 20 个渠道。它**没有 OAuth**：登录靠
+  **导入本机桌面端已登录的会话文件**
+  （`%LOCALAPPDATA%\Programs\AStudio Data\userdata\astron-session.json`，可用
+  `DSH_ASTUDIO_SESSION_FILE` 覆盖）。三处协议事实与本插件其它家都不同：推理基址在
+  `/model-gateway/v1` 而目录在 `/api/v1/model-manager`（拼 `/v1/models` 恒 404）、推理端点
+  **只认裸 slug**（填 `builtin/<base64>` 回 502 `model_not_found`）、失败有两种信封
+  （目录面是 HTTP 200 + `code !== 0`）。⚠️ 因为默认路径读 `LOCALAPPDATA`，
+  **远程/容器部署看不到本机会话**，需要用「打开认证页」或 env 指路径（已写进 README）。
+- **模型目录 20 分钟 TTL + 后台刷新器**：新增 `isCatalogFresh` 作**唯一**新鲜度判据，
+  A 类四家（loomy / minimax / zcode / raccoon）与 B 类四家 + officeace + astudio 全部接入，
+  `be42b25` 遗留的「刷新器拿不到各家 `refresh`」由 `3186eaf` 补了 12 家转发 +
+  参与度检测（否则刷新器**空转**）。用户改设置时立即失效缓存。对本项目的意义：
+  `/v1/models` 不再每次都等上游拉目录（`a80ab4a` 实测旧路径卡 7 秒，
+  `a4765aa` 实测 `resolveModel` 阻塞 70 秒），**网关首轮响应明显变快**。
+- **共享余额读数改为 stale-while-revalidate**：先回旧值、后台定时保鲜，面板打开更快。
+- **聚合路由**：取消请求不再被折算成 `UNUSABLE`（此前取消一次 = 该渠道消失 60 秒）；
+  目录缓存判据并入 `isCatalogFresh`，消掉第二份实现；复审修掉 3 Critical + 2 Important。
+- **TRAE 签到收尾参与 1024 打卡抽奖**（`trae-lottery.ts`，454 行用例）。
+- **CodeArts**：补 `refresh` 寿命腿（30 天硬上限导致的续期漏窗 + `refreshable` 永真）；
+  APIG 瞬时签名故障改为**有界重发** + abort 守卫。
+- **AutoClaw**：`access_token` 死线改以 **JWT exp** 为准（删掉编造的 7 天，IKOYEG）；
+  非法思考档位本地拦截，避免按最贵档静默计费。
+- **登录失败文案**： 「未开通」类失败不再拼「请重新点击「+ 新建账号」」这条**假出路**。
+
+### 本仓库改动与验证
+
+- `package.json` / `package-lock.json` 各一处依赖行。
+- **测试期望是本次唯一需要动的代码**（这正是「新增渠道 0 行」那条承诺的兑现方式）：
+  `tests/host.test.mjs` 的 `EXPECTED_PROVIDERS` 加 `"astudio"`（位置在 `accio` 之后、
+  `modelscope` 之前 —— 由实际注册序实测得到，不是照注册表抄）；`tests/admin-ui.test.mjs`
+  导航断言加 `AStudio`，总数 20 → **21**（20 渠道 + 1 聚合）。
+- 渠道数文案 19 → **20**（README 三处 + 测试注释两处）。
+- `npm run build` 重建产物（`public/upstream-jet-hub.js` 含 34 处 `astudio`）。
+- `npm test` **22/22 通过**；`npm run lint`、`npm run format:check` 通过；
+  `npm start` 契约核对行正常，`/healthz` 的 `providers` 实测为 20 渠道 + `aggregate` +
+  `jet-hub-auto`。
+- **产品代码 0 行改动**。未用真实账号验证 AStudio 链路（需要本机装桌面端并扫码）与
+  TRAE 抽奖（需要真机签到）。
+
+### 坑
+
+**① 同上次：npm 11 `allow-scripts` + pnpm 新包冷却期**，命令仍需
+`--userconfig <干净 npmrc>` 与 `PNPM_CONFIG_MINIMUM_RELEASE_AGE=0`（详见上一条）。
+本次还额外撞了一次 `ECONNRESET`（拉 `undici` 时），原样重试即过 —— 不需要改配置。
+
+**② `EXPECTED_PROVIDERS` 的顺序只能靠实测。** 上游 `provider-registry.ts` 的声明顺序与
+`index.ts` 的**适配器注册顺序不同**，而断言比的是后者。快速拿真值：
+
+```bash
+node -e "import('./tests/helpers.mjs').then(async h=>{const a=await h.startTestApp();
+console.log(JSON.stringify(a.host.ctx.get('llm').listProviders().map(e=>e.id)));await a.close();process.exit(0)})"
+```
+
+### 本仓库追加（合并时补齐）
+
+- 提交数订正：上游条目写「43 个 commit」，实测 `82da5df..b5dab83` 为 **46 个提交**
+  （其中 40 个非 merge 提交），差异来自上游统计口径，以 `git rev-list --count` 为准。
+- README 有一处**两侧都改同一行**的冲突：本仓库此前把 opencode 那行改成
+  「`sk-` 或新版 `oc_sk_` key」，上游同时在该行追加 `astudio`。按「两边都保留」解决，
+  最终为「`sk-` 或新版 `oc_sk_` key」+「`astudio`（导入本机桌面端会话）」。
+- 渠道数 19 → **20**（README 三处、`tests/admin-ui.test.mjs` 注释、`tests/host.test.mjs` 注释）；
+  导航断言总数 20 → **21**（20 渠道 + 1 聚合面板）。
+- **构建期补丁在新 pin 上继续生效**：`scripts/patch-upstream.mjs` 两处修补均打出
+  `pattern: patched; refName: patched`（`src/opencode-rpc.ts` 在
+  `82da5df..b5dab83` 之间**零改动**，故补丁锚点不变）。
+- 验证：`npm test` **27/27 通过**、`npx eslint .` 通过；镜像内确认 AStudio 相关产物存在
+  （证明 pin 真解析到 `b5dab83`）；真实进程 + HTTP RPC 复测 OpenCode 尾段含连字符的 key
+  仍能入库、重复添加返回 `existed: true`。
+- 产品代码 0 行改动；未部署、未重建任何运行中实例。
+
+</details>
+
+<details>
 <summary><b>2026-10-19 · 上游升级到 <code>82da5df</code>（Accio 请求级换号 + Gemini 出口代理）</b></summary>
 
 依赖从 `b0a6409e96181943672c6a65c549964ed50a56be` 更新到
