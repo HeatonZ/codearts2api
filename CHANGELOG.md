@@ -7,6 +7,107 @@
 ---
 
 <details open>
+<summary><b>2026-10-20 · 管理端登录鉴权、<code>/v1/*</code> 默认可用、Qoder 模型列表改走远端；上游升级 <code>cafe269</code></b></summary>
+
+## 管理端登录鉴权
+
+部署到公网不再需要反向代理做访问控制，服务自带登录页。
+
+**使用方式**：首次启动生成 `<CODEARTS2API_HOME>/admin-key`，打开 `/admin` 粘贴即可进入。
+密钥固定不变，要换就删除该文件，或改用 `CODEARTS2API_ADMIN_KEY` 指定。
+
+**管理密钥与网关 Key 是两把**：网关 Key 给调用方访问 `/v1/*`，管理密钥用来进后台。
+分开是为了让「把网关 Key 发给别人」不等于「把后台也交出去」。
+
+| 能力        | 说明                                                                      |
+| ----------- | ------------------------------------------------------------------------- |
+| 浏览器登录  | 登录后下发 HttpOnly 会话 Cookie，30 天有效                                |
+| 脚本 / 监控 | 支持 `Authorization: Bearer <admin-key>`                                  |
+| 防爆破      | 登录失败按来源 IP 限速：10 次 / 10 分钟                                   |
+| 关闭鉴权    | `CODEARTS2API_ADMIN_AUTH=0`（仅限本机，启动日志与 `/healthz` 会如实反映） |
+
+**受保护范围**：`/`、`/admin`、`/api/jet-hub` 及全部管理静态资源需要登录。
+
+**不需要登录的**：`/healthz`（不含密钥，供监控）、`/v1/*`（用网关 Key）、
+`/api/jet-hub/captcha-carrier`（验证码页面，需被内嵌浏览器直接打开）。
+
+**响应安全头**：管理页面统一带 CSP、`X-Frame-Options: DENY`、`nosniff`、`Referrer-Policy`。
+
+## `/v1/*` 默认可用
+
+不再需要 `PROXY_GATEWAY=1`。此前忘记设置会表现为 `/v1/*` 全 404，容器里不易察觉。
+需要关闭时设 `PROXY_GATEWAY=0`，该端口会返回明确的 `proxy_disabled` 提示。
+
+## 上游升级
+
+依赖从 `82da5df88e90b831a833011b4ce506a934fdb1bc` 更新到
+`cafe269872f4b99af15745981ce8ff8e085b959b`，版本号仍为 **0.2.1-rc.2**
+（`peerDependencies` 与 `dependencies` 未变，无需换基础包）。
+
+### Qoder 模型列表改走远端（本次重点）
+
+此前 Qoder / Qoder(中国版) 的模型列表**恒用编译期快照**（国际版 2026-09-21、中国版
+2026-09-27），一次远端请求都不发。上游因此改价、改免费额度、上下架模型都不会被感知。
+
+现在 `/v1/models` 走远端目录，**倍率与免费标记跟随上游实时变化**：
+
+- 上游已把 `DeepSeek-Flash` 调为免费（0×）、`mmodel` 改名 `MiniMax-M3.1-Flash`（0.2 → 0.1），
+  这些变化现在能正确显示（此前一直显示旧的 0.1×）。
+- 远端目录**按账号下发**（一个免费额度号上游可能只给 2 条），所以缓存即「上次成功那个
+  账号的目录」。能力与元数据（图片支持、上下文长度、思考档位）取「远端 ∪ 内置表」的并集 ——
+  否则某个账号的窄目录会把模型误判成「不支持图片」并退化显示名。
+- 远端拉取失败或未登录时自动回退内置表，功能不受影响。
+
+### 思考档位解析对齐官方客户端
+
+- 档位白名单从 7 个收敛为官方的 **6 个**（`none`/`low`/`medium`/`high`/`xhigh`/`max`，无 `minimal`）。
+- `efforts` 现在同时接受**数组、逗号/空格分隔字符串、对象**三种形态。
+- 补齐顶层 `default_effort`、`supports_disabled`、`available_reasoning_effort`（后者是一个
+  `thinking_config` 对象，且仅在条目自身无档位时才读）的解析。
+
+### 其他
+
+- **新增 AStudio（讯飞 astronautStudio）渠道** —— 第 20 个渠道。它没有 OAuth：登录靠
+  **导入本机桌面端已登录的会话文件**
+  （`%LOCALAPPDATA%\Programs\AStudio Data\userdata\astron-session.json`，可用
+  `DSH_ASTUDIO_SESSION_FILE` 指向别处）。⚠️ 远程/容器部署看不到本机会话，
+  需要用「打开认证页」或该环境变量指路径。
+- **模型目录 20 分钟 TTL + 后台刷新**：`/v1/models` 不再每次都等上游拉目录，
+  **网关首轮响应明显变快**；用户改设置时立即失效缓存。
+- **共享余额读数改为先回旧值再后台保鲜**：面板打开更快。
+- **聚合路由**：取消请求不再被当作渠道不可用（此前取消一次 = 该渠道消失 60 秒）。
+- **TRAE 签到**收尾参与 1024 打卡抽奖。
+- **CodeArts**：修复 30 天硬上限导致的续期漏窗。
+- **AutoClaw**：token 死线以 JWT exp 为准；非法思考档位本地拦截，避免按最贵档计费。
+
+渠道数 19 → **20**。
+
+### 本仓库追加（合并时补齐）
+
+- 上游中间层本次 3 个提交：`207e234` 管理端鉴权、`a081c85` 不信任 `X-Forwarded-*`、`55e531f`
+  升级 pin 到 `cafe269`。gitee 业务核心 `b5dab83..cafe269` 为 **3 个提交**（全部非 merge），
+  改动集中在 Qoder：新增 `src/qoder-catalog.ts`（543 行）把模型目录改走远端，
+  配套 `qoder-adapter.ts` / `qoder-auth.ts` / `qoder-wasm.ts` 与 4 个测试文件。
+- **渠道集合与注册顺序未变**（仍是 20 个渠道 + `aggregate` + `jet-hub-auto`），
+  `tests/host.test.mjs` 与 `tests/admin-ui.test.mjs` 的期望无需调整。
+- **构建期补丁在新 pin 上继续生效**：`cafe269` 的 `src/opencode-rpc.ts` 与 `b5dab83` 一致，
+  `KEY_PATTERN` 与 `slotNamesOf` 两个锚点原样存在。
+- Dockerfile 冲突：本仓库此前记录「上游自 `f10d1e5` 起监听地址可经 `DSH_OPENAI_GATEWAY_HOST`
+  修改」，上游这一版把该注释改回「硬编码」。按**事实**取本仓库侧（该变量确实存在），
+  并补上上游新增的「`PROXY_GATEWAY` 现已冗余」说明。
+- README 冲突三处：环境变量表按「上游新增 + 本仓库的 `DSH_OPENAI_GATEWAY_HOST` 行」合并
+  （新增 `CODEARTS2API_ADMIN_KEY`、`CODEARTS2API_ADMIN_AUTH`，`PROXY_GATEWAY` 默认值改「开」）；
+  `PROXY_GATEWAY` 段落保留本仓库的 `DSH_OPENAI_GATEWAY_HOST` 说明并追加关闭方式；
+  「发布镜像版本」段落是本仓库独有的内容，完整保留。
+- CHANGELOG 自动合并把本仓库 v1.9.0 条目（`b5dab83` / AStudio）整段覆盖掉了 ——
+  两边都是「2026-10-20」的条目，git 按同位置取舍。已从 `66d56a6` 恢复该条目。
+- ⚠️ **升级注意**：本版起 `/admin` 需要登录，管理密钥在 `<CODEARTS2API_HOME>/admin-key`
+  （首次启动生成，`0600`，只在生成那一次打印到日志）。`/v1/*` 的网关 Key 不变。
+  反向代理上的 Basic Auth 可以撤掉。
+
+</details>
+
+<details open>
 <summary><b>2026-10-20 · 上游升级到 <code>b5dab83</code>（新增 AStudio + 模型目录刷新器）</b></summary>
 
 依赖从 `82da5df88e90b831a833011b4ce506a934fdb1bc` 更新到
@@ -133,41 +234,23 @@ commit、没有动 `package.json` 的 version，所以 `@deepseek-ai/dsh-*` 基�
   占用时网关只记 `EADDRINUSE` 并跳过，不影响 `/admin`（文档已写明的已知边界）。
 - 未用真实账号验证新换号策略与 Gemini 代理通路（需要墙外出口与多个 Accio / Gemini 账号）。
 
-### 安装障碍与坑（本次实际踩到）
+### 安装说明
 
-**① npm 11 的 `allow-scripts` 会把 git 依赖的 `prepare` 打死。**
-本机 `~/.npmrc` 里有 `allow-scripts=true`，而 npm 11.16 的
-`resolveAllowScripts()` 对**项目内**安装会**直接抛错**
-（`EALLOWSCRIPTS: --allow-scripts is not allowed in project-scoped installs`）——
-它把这个配置当成了「命令行传 `--allow-scripts`」。更麻烦的是这条错误发生在
-**上游克隆目录里跑的第二次 npm**（`git dep preparation`），所以外层报的是
-`git dep preparation failed`，看起来像网络或上游的问题。
-
-绕过方式：给这条命令指定一个**不含 `allow-scripts` 的 userconfig**：
+**① npm 11 的 `allow-scripts` 可能导致 git 依赖安装失败。**
+若 `~/.npmrc` 里有 `allow-scripts=true`，npm 11 会报
+`EALLOWSCRIPTS: --allow-scripts is not allowed in project-scoped installs`，
+而外层显示为 `git dep preparation failed`。解决：删掉该行，或指定一个干净的 userconfig：
 
 ```bash
-npm install "dsh-codearts-auth@git+https://gitee.com/iJetLi/deepseek-harness-codearts.git#<commit>" \
-  --include=dev --no-audit --no-fund --userconfig /tmp/clean-npmrc   # 里面只留 registry
+npm install "dsh-codearts-auth@git+…#<commit>" --include=dev --no-audit --no-fund \
+  --userconfig /tmp/clean-npmrc   # 里面只留 registry
 ```
 
-清空 `NPM_CONFIG_ALLOW_SCRIPTS` 环境变量**无效**（配置来自 `~/.npmrc`，不是 env）。
-装完后 npm 会警告 `dsh-codearts-auth` 的 `prepare` 与 `esbuild` 的 `install` 脚本
-「not yet covered by allowScripts」—— **但这次构建成功了**，产物时间戳与内容都对得上；
-下次若真被拦住，按提示 `npm approve-scripts <pkg>` 或往 `package.json` 写
-`allowScripts` 字段。
+**② pnpm 11 的新包冷却期**：上游刚发布的包在 24 小时内会被拒装，
+需加前缀 `PNPM_CONFIG_MINIMUM_RELEASE_AGE=0`。
 
-**② `PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` 这次仍要带**（pnpm 11 的新包冷却期，见上一条
-2026-10-18 记录），否则上游克隆目录里的 `pnpm install` 会因它锁文件里的 `0.2.1-rc.2`
-被拒。
-
-**③ 本机行尾漂移会让 `npm run format:check` 假红。**
-Git 的 `core.autocrlf=true` 把工作区若干文件检成了 **CRLF**，而 Prettier 默认
-`endOfLine: "lf"` ⇒ 这 6 个文件（`CHANGELOG.md` / `README.md` / `package.json` /
-`src/server.js` / `tests/admin-ui.test.mjs` / `tests/host.test.mjs`）在**升级前就是红的**，
-与本次升级无关。本次把这 11 个被检成 CRLF 的文件在工作区**统一转回 LF**
-（内容零变化，`git diff` 仍只有依赖两行），`format:check` 随即通过。
-提交内容不受影响（仓库存的是 LF），但**本机检出后**若再次变红，先查
-`git ls-files --eol | Select-String 'w/crlf'`，而不是去改代码。
+**③ 行尾差异**：Git 的 `core.autocrlf=true` 可能让 `npm run format:check` 报错，
+用 `git ls-files --eol` 检查并统一为 LF。
 
 ### 本仓库追加（合并时补齐）
 
@@ -213,7 +296,7 @@ Git 的 `core.autocrlf=true` 把工作区若干文件检成了 **CRLF**，而 Pr
   11128 / 11140 分类与按账号换号等多处修复。
 - 客户端多模式弹窗的 `select` 失效改为卡片单选组（覆盖 ZCode / Accio / AutoClaw）。
 
-### ⚠️ 安装障碍：pnpm 11 的「新包冷却期」（本次踩到）
+### ⚠️ 安装障碍：pnpm 11 的「新包冷却期」
 
 pnpm 11 默认拒绝安装**发布不足 24 小时**的包。上游把它刚发布的 `0.2.1-rc.2`
 写进了**自己的** `pnpm-lock.yaml`，而 npm 拉 git 依赖时会在克隆目录里跑上游的
@@ -224,7 +307,7 @@ The lockfile contains entries that the active policies reject.
 @deepseek-ai/dsh-llm@0.2.1-rc.2 was published at …, within the minimumReleaseAge cutoff
 ```
 
-逐项实测的放行方式（**只有这一种有效**）：
+放行方式对照（**只有环境变量有效**）：
 
 | 写法                                                          | 结果    |
 | ------------------------------------------------------------- | ------- |
@@ -745,7 +828,7 @@ ESLint 通过；并用真实进程 + HTTP RPC 实测该 key 成功入库（账�
 
 改动文件：`package.json`、`package-lock.json`。
 
-> ⚠️ **安装期间踩到一次偶发网络故障**（与上游无关）：官方源拉 `typescript` 时
+> ⚠️ **偶发网络故障**（与上游无关）：官方源拉 `typescript` 时
 > `ECONNRESET` 导致 `git dep preparation failed`。实测两源连通性均正常，
 > 换镜像重试即成功。锁文件里的镜像地址源自首个提交，本次仅 2 行 git commit 变更。
 
@@ -962,7 +1045,7 @@ raccoon 图片能力白名单、badge 四处展示缺陷。
 > 💡 上游改了 35 个文件、+3883 行，本项目**一行代码都没动** —— 这就是
 > 「薄胶水 + 复用而非拷贝」的收益。
 
-> ⚠️ 第 5 步踩到一个**预期行为**：若本机 DSH 正在运行，它会占用插件网关的默认
+> ⚠️ **预期行为**：若本机 DSH 正在运行，它会占用插件网关的默认
 > 端口 `8326`，本仓库实例会记一条 `EADDRINUSE` 并**跳过网关启动**（管理界面与
 > 其它功能不受影响）。要同时跑，换个端口：
 > `DSH_OPENAI_GATEWAY_PORT=18432 npm start`。
