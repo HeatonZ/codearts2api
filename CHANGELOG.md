@@ -7,6 +7,80 @@
 ---
 
 <details open>
+<summary><b>2026-10-20 · 管理端鉴权（公网部署不再需要反代做访问控制）+ <code>PROXY_GATEWAY</code> 默认开启</b></summary>
+
+响应 [issue #2「公网部署建议」](https://github.com/zhuweiyou/codearts2api/issues/2)：
+使用者要部署到公网服务器，但「加安全很麻烦，小白不太懂」，希望部署后自带验证。
+
+### 问题
+
+`/admin`、`/admin.js`、`/api/jet-hub` 此前**全部无鉴权**，而 `/api/jet-hub` 的
+`backup.export` 能导出**全部账号凭据**、`gateway.getEnabled` 能**明文取回网关 Key**。
+也就是说「公网可达」等于「账号全送」—— 唯一的补救是让用户去配 nginx Basic Auth，
+正是 issue 里说的那个门槛。
+
+### 新增：独立的管理密钥 + 登录页
+
+- **新增 `src/admin-auth.js`**：密钥生成/读取、常量时间校验、会话令牌、登录限速。
+- **新增 `src/admin-login-page.js`**：服务端渲染的登录表单（不依赖前端 JS）。
+- 首次启动生成 `<home>/admin-key`（`0600`，日志**只打一次**），也可用
+  `CODEARTS2API_ADMIN_KEY` 指定。
+- 浏览器：登录后下发 **HttpOnly 会话 Cookie**（`SameSite=Lax`，30 天）。
+  令牌是 `HMAC(admin-key, 常量)` —— 不可伪造、不泄露密钥、换钥即全体失效。
+- 脚本：仍接受 `Authorization: Bearer <admin-key>`，curl / 监控不受影响。
+- 登录失败按来源 IP 限速（10 次 / 10 分钟），且**限速期间正确密钥也被挡**
+  （否则「猜对一次」就能绕过）。
+- `CODEARTS2API_ADMIN_AUTH=0` 可关闭（本机调试），启动日志与 `/healthz` 都会如实反映。
+
+### 为什么**不**复用网关的 `api-key`
+
+网关 Key 是**发给调用方**的（填进别人的客户端），管理权限不能跟着走 —— 否则
+「给了朋友 API Key」等于「给了朋友后台」。参考实现（workbuddy2api-panel）共用一把，
+本项目改为**分开**。
+
+### 默认拒绝的白名单
+
+| 路径                                                                                                          | 处理                                                               |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `/`、`/admin`、`/admin/`、`/admin.css`、`/admin-boot.js`、`/admin.js`、`/upstream-jet-hub.js`、`/api/jet-hub` | **拦截**                                                           |
+| `/healthz`                                                                                                    | 放行（不含密钥，监控用）                                           |
+| `/v1/*`                                                                                                       | 放行（插件网关自己的 Bearer，判定权只在一处）                      |
+| `/api/jet-hub/captcha-carrier`                                                                                | 放行（页面无秘密 + 要被 `<webview>` 直接导航，加鉴权会废掉 zcode） |
+
+写成「默认拦截 + 显式放行」而不是逐条列举：黑名单的失效方式是**静默**的
+（新加一个静态文件自动变公开），白名单的失效方式是**显式**的（立刻有人报障）。
+
+### 安全响应头
+
+管理相关响应统一带 CSP（`default-src 'none'` / `script-src 'self'` /
+`frame-ancestors 'none'`）、`X-Frame-Options: DENY`、`nosniff`、`Referrer-Policy`。
+
+为此把 `admin.html` 的**内联 `<style>` 与内联 `<script>` 拆成外部文件**
+（`public/admin.css`、`public/admin-boot.js`）—— 否则 `script-src 'self'` 会拦掉
+那个定义 `__ModuleLoader__` 的垫片，表现为整页白屏。
+
+> ⚠️ `style-src` 仍保留 `'unsafe-inline'`：上游 UI 用 React 的 `style={{…}}`，
+> 那是元素 style 属性（归 `style-src-attr`），CSS 的 `'unsafe-inline'` 覆盖不了它。
+> `img-src` 也要 `blob:`（上游导出 CSV/JSON 时用 `URL.createObjectURL`）。
+
+### `PROXY_GATEWAY` 改为默认开启
+
+初版要显式 `PROXY_GATEWAY=1`，那是个部署陷阱：容器里忘了设就表现为「服务起来了但
+`/v1/*` 全 404」，而 404 完全不像配置问题。现在默认开，要关才设 `PROXY_GATEWAY=0`
+（网关照旧监听 8326，本机开发可直连）。
+
+### 验证
+
+- 新增 `tests/admin-auth.test.mjs`（11 条）：拦截清单（含根路径 `/`）、401 形态、
+  放行清单、登录换 Cookie、伪造 Cookie、限速、开放重定向、安全响应头、密钥文件
+  生成与复用、`ADMIN_AUTH=0` 关闭路径。
+- `npm test` **33/33 通过**（含既有的 `/admin` 渲染端到端用例 —— 它现在也顺带验证了
+  「拆出去的 `admin-boot.js` 真的能定义 `__ModuleLoader__`」）。
+- `eslint` 与 `prettier --check` 全绿。
+
+</details>
+
+<details>
 <summary><b>2026-10-20 · 上游升级到 <code>b5dab83</code>（新增 AStudio + 模型目录刷新器）</b></summary>
 
 依赖从 `82da5df88e90b831a833011b4ce506a934fdb1bc` 更新到
