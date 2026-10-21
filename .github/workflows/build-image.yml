@@ -11,29 +11,17 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}
 
 jobs:
-  # 质检闸门：先用同一份 Dockerfile 构建镜像（不推送），在镜像里跑测试。
-  # 测试不过 ⇒ build-and-push 不会启动，永远发不出坏镜像。
-  # ⚠️ 本仓库自己的两条用例只能在这里跑到：admin 宿主桩（web/admin.jsx）
-  #    与构建期补丁（scripts/patch-upstream.mjs）都是 fork 独有，上游测试覆盖不到。
-  verify:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Build image for verification
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          load: true
-          tags: codearts2api:verify
-
-      - name: Run test suite inside the built image
-        run: docker run --rm --entrypoint sh codearts2api:verify -c 'cd /app && npm test'
-
-  build-and-push:
-    needs: verify
+  # 一个作业做三件事：构建 → 在镜像里跑测试 → 推送**同一份**镜像。
+  #
+  # ⚠️ 为什么不是一个 verify 作业构建、另一个作业再构建推送：那样「测试通过的
+  #    镜像」与「推出去的镜像」是两次独立构建，只有输入相同这一层间接保证。
+  #    这里用 `load: true` 落成本地镜像 → 测它 → 打标签推它，推上去的镜像 ID
+  #    与被测的完全相同。
+  #
+  # ⚠️ 本仓库有两条用例只有这里跑得到：`/admin` 宿主桩（web/admin.jsx）与
+  #    构建期补丁（scripts/patch-upstream.mjs）都是 fork 独有，上游测试覆盖不到。
+  #    测试不过 ⇒ 后面的 docker push 根本不会执行，永远发不出坏镜像。
+  build-test-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -68,6 +56,17 @@ jobs:
           echo "Resolved tags for ${GITHUB_REF} (${GITHUB_REF_TYPE}):"
           printf '%s\n' "${tags[@]}"
 
+      - name: Build image (not pushed yet)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: codearts2api:verify
+
+      - name: Run test suite inside the built image
+        run: docker run --rm --entrypoint sh codearts2api:verify -c 'cd /app && npm test'
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -75,9 +74,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.tags.outputs.tags }}
+      # 推的就是上面那个被测过的镜像 ID：这里只打标签，不重新构建。
+      - name: Tag and push the tested image
+        env:
+          TAGS: ${{ steps.tags.outputs.tags }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker tag codearts2api:verify "$tag"
+            docker push "$tag"
+          done <<< "$TAGS"
