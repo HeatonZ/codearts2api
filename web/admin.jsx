@@ -87,11 +87,20 @@ function loadUpstreamPage() {
   })
 
   let page = null
-  // 桩 ctx：上游客户端的宿主依赖面只有这三个。
+  // 桩 ctx：上游客户端在 **`apply` 期**会用到的只有这四个（`effect` / `slots` /
+  // `inject` / `connection`）。其余成员（`ctx.rpc`、`ctx.modelDirectories`、
+  // `ctx.sessions`、`ctx.remote`、`ctx.credentials`）都在组件内部按需读取，
+  // 且上游代码自带「拿不到就降级/跳过」的判据，不在这里构造。
   upstream.apply({
     // `apply` 里用 effect 装了全局样式。真 DSH 会传入 disposer 语义的清理器，
     // 这里直接执行：本页面只加载一次，不需要撤销。
     effect: (body) => body(),
+    // 上游 2026-10 起在注册侧栏入口时调 `ctx.inject(['layout'], …)` 拿作用域副本。
+    // 本宿主没有 layout 服务，但上游对该服务是**可选**依赖（内部全用 `layout?.`
+    // 兜底，拿不到就不撤销选中），所以这里按「服务缺失」语义回调：传入一个不含
+    // `layout` 的 ctx。**不能省略这个方法** —— 省略会让整页在 apply 期抛
+    // `ctx.inject is not a function`，直接白屏成「管理界面加载失败」。
+    inject: (_names, callback) => callback({}),
     slots: {
       inject: (_name, callback) => callback(),
       register: (options, component) => {

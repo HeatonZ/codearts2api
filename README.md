@@ -317,6 +317,11 @@ docker run -d --name codearts2api \
 | Actions 页手动运行          | 发布所选分支或标签的 SHA 镜像；选默认分支时同时更新 `latest` |
 | 自动升级依赖并成功推送      | 直接复用发布流程，构建升级后的提交；无更新或升级失败则跳过   |
 
+> 🔧 **本 fork 的差异**：镜像发布走本仓库自己的 `build-image.yml`（`v*` tag 发版本号、
+> 默认分支发 `latest` + `sha-`），上游带来的 `publish-image.yml` 自动触发已关闭，
+> 只留 `workflow_dispatch`；「自动升级依赖并成功推送」那一行依赖每日定时，
+> 本 fork 已注释掉定时（见上一节），故只在手动跑升级工作流时才触发。
+
 发布使用内置 `GITHUB_TOKEN`，无需额外 Secret。首次发布后，如需匿名拉取，
 在仓库的 **Packages → 镜像包 → Package settings** 中将可见性设为 **Public**。
 
@@ -691,6 +696,14 @@ CHANGELOG.md       变更记录（新的在最前面）
 
 ### 自动升级（GitHub Actions）
 
+> 🔧 **本 fork 已关闭定时触发**（2026-10-21）：上游每日自动升级会**自动改 pin 并直推
+> `main`**，跳过本 fork「人工构建 + 跑测试确认」这一步。上游客户端只要新增一处对宿主
+> 桩 ctx 的要求（本次 `6b437fd` 的侧栏入口就要 `ctx.inject`），就会在没人构建过的情况下
+> 静默进 `main`：本次正是人工构建后才发现 `/admin` 整页白屏（详见 [`CHANGELOG.md`](CHANGELOG.md)）。
+> 因此 `.github/workflows/upgrade-upstream.yml` 的 `schedule` 已注释掉，
+> 工作流**只保留手动触发**；需要时到 Actions 页点 **Run workflow**。
+> 下表的「定时」一行描述的是上游原设计，本 fork 已不生效。
+
 工作流：`.github/workflows/upgrade-upstream.yml`。
 
 | 项       | 值                                                                                                 |
@@ -757,8 +770,9 @@ import * as plugin from "dsh-codearts-auth" // src/host.js 唯一的一行
 ### 升级流程
 
 > ⚠️ **本仓库已把上游升级脚本化**：日常升级由
-> [`scripts/upgrade-upstream.mjs`](scripts/upgrade-upstream.mjs) 完成，
-> GitHub Actions 每天北京时间 **08:08** 自动跑一次（也可在 Actions 页手动触发）。
+> [`scripts/upgrade-upstream.mjs`](scripts/upgrade-upstream.mjs) 完成。
+> 该脚本在本 fork **只手动跑**（`npm run upgrade:upstream`，或到 Actions 页手动触发
+> 工作流）—— 每日定时已在 2026-10-21 注释掉，原因见上一节。
 > 下面这一节保留**手工流程**，用于「脚本跑挂了要人工兜底」或「想手动看每一步」。
 >
 > ```bash

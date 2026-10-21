@@ -7,11 +7,11 @@
 ---
 
 <details open>
-<summary><b>2026-10-21 · 上游升级 <code>b0940ca</code>（自动升级）</b></summary>
+<summary><b>2026-10-21 · 上游升级 <code>6b437fd</code>（直达 gitee master，共 66 个提交）</b></summary>
 
 ## 上游升级
 
-依赖从 `78dc506cf42bb1821a20cd4378f2b81cd8de8ded` 更新到 `b0940cace56c9da9e0467a96c60b5fa4a358a20a`。
+依赖从 `78dc506cf42bb1821a20cd4378f2b81cd8de8ded` 更新到 `6b437fdb1062aac9225800210d56a1437538f855`，**跳过了 GitHub 中间层当时的 pin `b0940ca`，直接跟到 gitee `master`**（2026-10-17 用户已批准这条路径）。跨 66 个提交。
 
 ### 上游改动
 
@@ -52,6 +52,34 @@
 - feat(minimax): 补永久/长期/临期三档分档 + 锁定永久积分
 - fix(astudio): PR 自查三处修正（失效文件引用 / 迁就测试的顺序 / 断言越界）
 - feat(astudio): 补永久/长期/临期三档分档 + 锁定永久积分
+
+
+### `b0940ca` → `6b437fd` 追加的 18 个提交
+
+- feat(jet-hub): 原生侧栏入口 + 「侧栏」开关；单账号账号卡不再不占满宽度（PR !139）
+- fix(jet-hub): 三档合计必须等于 total —— 临期数字用总额，倒计时降级为「其中」限定语（PR !135）
+- fix(trae): 多 tool_call 时结果内嵌图片插到 `role:tool` 之前致 4027（PR !128）
+- fix(cline): 补 minimax-m3.1-flash 的 maxTokens 声明 —— 请求不带 max_tokens 会退回网关默认 4096，长回答被静默截断（PR !138）
+- refactor(credential-resolver): isFreeModel 改为必填 —— 漏接从「静默失效」变成编译错误（PR !137）
+- fix(qoder): 积分「一直读取中」改成带原因的失败文案 + 多账号并发；免费模型不再被「锁定永久积分」误拦（PR !136）
+- fix(tencent-fingerprint): 补第 5 条指纹 —— DSH Web 运行面那两句（真实报障「只改第 1 行仍被拦」）
+- fix(accio) + fix(css): 补 trae 那类缺陷的第二个入口 + 面板窄条的根因修法
+- fix(audit): 修三处阻断/重要缺陷 —— qoder 免费判据只查远端、批量隔离被打破、徽标 title 残句
+- docs(pii) / docs(audit): 审计结论登记与「守卫自己会出现在审计脚本里」的误报说明
+
+### 本仓库处理
+
+- **合并上游 6 个提交**：上游升级脚本化（`scripts/upgrade-upstream.mjs`）、多架构镜像发布、README 面向用户重写、Node 22 → 24
+- **关闭上游带进来的两套自动 CI**：`upgrade-upstream.yml` 的每日定时（会自动改 pin 并推 `main`，打乱本仓库发布节奏）与 `publish-image.yml` 的自动触发（与本仓库 `build-image.yml` 重复发布）。两个文件都保留、只留 `workflow_dispatch`
+- **修 `/admin` 宿主桩 ctx 缺 `inject`**：上游本次新增的侧栏入口在注册期调 `ctx.inject(['layout'], …)` 拿作用域副本，而本仓库 `/admin` 的桩 ctx 只提供 `effect` / `slots` / `connection`，实测整页白屏成「管理界面加载失败：ctx.inject is not a function」。补成「服务缺失」语义（回调一个不含 `layout` 的 ctx）—— 上游内部对 layout 全部用 `?.` 兜底，拿不到就不撤销选中，与真 DSH 上「布局服务缺失」行为一致
+- **构建期补丁仍然必需**：上游到 `6b437fd` 仍是 `/^sk-[A-Za-z0-9_-]{20,}$/` 与 `OPENCODE_ACCOUNT_${tail}`，本仓库 `scripts/patch-upstream.mjs` 的两处改写（key 形态放宽到 `oc_` 开头、派生凭据名补非法字符消歧）继续生效
+
+### 验证
+
+- Docker 构建成功，`patch-upstream` 两处均输出 `patched`（`opencode-rpc.js` 的 key 判据 + client hint）
+- 构建产物内 `package-lock.json` 锁定的 commit = `6b437fdb1062aac9225800210d56a1437538f855`；`sidebarEntry` 符号在产物中出现 6 次，而该符号在 `b0940ca` 的源码里为 0 次 —— 证明 pin 确实解析到了 6b437fd，不是缓存
+- 渠道集合无变化：`provider-registry` 的 22 个 id / 20 个注册函数，与升级前一致
+- `npm test`：**41 / 41 通过**（补 `inject` 之前是 39/41，两条 admin 用例红）
 
 </details>
 
