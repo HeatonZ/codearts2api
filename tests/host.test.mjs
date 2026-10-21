@@ -44,7 +44,7 @@ const EXPECTED_PROVIDERS = [
   "zcode",
   // 上游 2026-10-13 新增：电脑果办（OfficeAce）。⚠️ 它紧跟 zcode、在 opencode **之前**。
   //
-  // ⚠️ 这几家的相对顺序（gemini → autoclaw → accio → modelscope → zcode → officeace → opencode）**与
+  // ⚠️ 这几家的相对顺序（gemini → autoclaw → autoclawintl → accio → astudio → modelscope → zcode → officeace → opencode）**与
   //    `src/provider-registry.ts` 里的声明顺序不同** —— 断言比的是**适配器注册顺序**
   //    （`index.ts` 里 `registerXxxLlm` 的调用序）。别照注册表抄，会让测试红。
   "officeace",

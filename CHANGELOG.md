@@ -64,6 +64,25 @@ API 主机（`autoglm-acceleration-api.zhipuai.cn` vs `autoglm-api.autoglm.ai`�
 验证：`npm test` 36/36 通过，`npm run lint` / `format:check` 干净，启动日志有
 `上游契约核对通过`（端点与槽名未变，`src/upstream.js` 无需改动）。
 
+### 本仓库追加（合并时补齐）
+
+- 上游中间层本次只有 1 个提交：`2ef6f55`（升级 pin 到 `78dc506`）。gitee 业务核心
+  `cafe269..78dc506` 为 **23 个提交**（其中 15 个非 merge），改动集中在 AutoClaw 侧
+  （`autoclaw-auth.ts` +215、`autoclaw-oauth.ts` +301、`autoclaw-product.ts` +116）
+  与新增的两个单测文件（`autoclaw-credits.spec.ts`、`autoclaw-intl-site.spec.ts`）。
+- 上游 CHANGELOG 写的验证条数是 `36/36`（那是上游仓库自己的用例数），本仓库实际基线是
+  **`npm test` 41/41 通过、`npx eslint .` 通过**（v1.10.0 起上游带 14 个鉴权用例）。
+- **构建期补丁继续生效**：`cafe269..78dc506` 区间 `src/opencode-rpc.ts` **零改动**，
+  `KEY_PATTERN` 与 `slotNamesOf` 两个锚点不变，构建输出 `pattern: patched; refName: patched`。
+- **pin 解析实证**：镜像内 `dsh-codearts-auth/lib/` 下 `autoclaw-oauth.js` /
+  `autoclaw-product.js` 存在且为 `78dc506` 版本；运行时 `listProviders()` 实测 **23 项**
+  = 21 个渠道 + `aggregate` + `jet-hub-auto`，`autoclawintl` 位于 `autoclaw` 之后、`accio` 之前。
+- `tests/host.test.mjs` 里那句「相对顺序」注释同步补上 `autoclawintl` 与 `astudio`
+  （上游加渠道时只改数组、没改注释，容易误导下一个人）。
+- 「AutoClaw 一键导入」的国际版归属校验与「关闭供应商后被目录增长静默重开」两条修复
+  都在本 pin 内，属上游行为，本仓库不额外打补丁。
+- 产品代码 0 行改动；未部署、未重建任何运行中实例。
+
 </details>
 
 <details>
