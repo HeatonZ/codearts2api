@@ -7,6 +7,36 @@
 ---
 
 <details open>
+<summary><b>2026-10-21 · 上游升级 <code>5aca46a</code>（gitee master，CodeArts 上下文窗口改正）</b></summary>
+
+## 上游升级
+
+依赖从 `6b437fdb1062aac9225800210d56a1437538f855` 更新到 `5aca46ac3811c92992f0926f8cf01b478e0d896e`（53 个提交 / 38 个非 merge，13 个文件 +624 −1030）。
+
+> ⚠️ gitee 侧把历史改写过：`6b437fd` **不再是新 master 的祖先**。所以本次是「按内容比」而不是按提交祖先比 —— 渠道集合（`provider-registry` 的 22 个 id）逐一比对完全一致，差异只在下面这些文件。
+
+### 上游改动
+
+- **fix(codearts): 上下文窗口取值改正** —— 权威来源是 IDE 内核日志 `provider.models[*].limit.context`（2026-09-11~10-21 共 42 份），不是 HTTP 目录端点（那两个端点根本不下发窗口字段）
+  - `GLM-5.2` / `glm-5.3`：`202_752` → **`1_048_576`**（上游 10-21 起改成 1M）。旧值留着的后果是静默的：占用比被顶成 100%，自动压缩阈值卡在 `0.8×202752≈162K`，1M 的能力永远吃不到
+  - `deepseek-v4.1-flash`：`1_000_000` → `1_048_576`（按 IDE 权威值改正）
+  - `glm-5.3-flash` / `deepseek-v4-flash` / `-pro`：补 1M；`openpangu-2.0-flash` / `-pro` 补 524_288；`glm-5.2-sft-harmony` 维持 202_752
+- **feat(codearts): 目录外模型 id 的兜底窗口** —— 新增回调：`codearts` 未知 id 仍给具名兜底（目录窗口全来自本地静态表，缺了会让占用条整条消失），其余 12 家**不提供**⇒ 未知模型不声明 context（编一个就是假窗口）。回调必须传 `modelId`
+- **fix(accio)+fix(css)**：补上 trae 那类缺陷的第二个入口 + 面板窄条的根因修法
+- **docs**：新增 `docs/agent-notes/providers-codearts.md`；删掉 `providers-buddy.md`、buddy 指纹 e2e 与对应单测，并把 tencent 指纹里「DSH 身份首句」那条规则移除（`tencent-fingerprint.ts` −150 行）
+- 移除 `test:e2e:buddy-fingerprint` 脚本
+
+### 本仓库处理
+
+- 业务核心 pin 提到 `5aca46a`（`package.json` 与 `package-lock.json` 的 `resolved` 三处同步）
+- **CI 改成「先质检再发布」**：`build-image.yml` 新增 `verify` 作业 —— 用同一份 Dockerfile 构建镜像但**不推送**，然后在镜像里跑 `npm test`，`build-and-push` 通过 `needs: verify` 依赖它。测试不过就永远发不出镜像
+- 构建期补丁无需改动：`5aca46a` 的 `opencode-rpc.ts` 仍是 `KEY_PATTERN = /^sk-[A-Za-z0-9_-]{20,}$/` 与 `OPENCODE_ACCOUNT_${tail.toUpperCase()}`，两处改写照旧命中
+- `/admin` 宿主桩无需改动：客户端插件的 `ctx.*` 成员集合与上一版完全一致（仍含 `inject`）
+
+
+</details>
+
+<details>
 <summary><b>2026-10-21 · 上游升级 <code>6b437fd</code>（直达 gitee master，共 66 个提交）</b></summary>
 
 ## 上游升级
@@ -310,7 +340,7 @@ API 主机（`autoglm-acceleration-api.zhipuai.cn` vs `autoglm-api.autoglm.ai`�
 
 </details>
 
-<details open>
+<details>
 <summary><b>2026-10-20 · 上游升级到 <code>b5dab83</code>（新增 AStudio + 模型目录刷新器）</b></summary>
 
 依赖从 `82da5df88e90b831a833011b4ce506a934fdb1bc` 更新到

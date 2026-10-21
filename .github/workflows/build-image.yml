@@ -11,7 +11,29 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}
 
 jobs:
+  # 质检闸门：先用同一份 Dockerfile 构建镜像（不推送），在镜像里跑测试。
+  # 测试不过 ⇒ build-and-push 不会启动，永远发不出坏镜像。
+  # ⚠️ 本仓库自己的两条用例只能在这里跑到：admin 宿主桩（web/admin.jsx）
+  #    与构建期补丁（scripts/patch-upstream.mjs）都是 fork 独有，上游测试覆盖不到。
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build image for verification
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: codearts2api:verify
+
+      - name: Run test suite inside the built image
+        run: docker run --rm --entrypoint sh codearts2api:verify -c 'cd /app && npm test'
+
   build-and-push:
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
