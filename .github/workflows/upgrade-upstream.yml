@@ -1,0 +1,86 @@
+name: 升级上游依赖
+
+# ── 触发时机 ──
+#
+# ① 每天北京时间 08:08 定时跑一次。
+#    ⚠️ GitHub Actions 的 cron 用 **UTC**，且**按小时错开**（防止全平台同一时刻打爆）。
+#    08:08 北京时间 = 00:08 UTC，所以这里写 `8 0 * * *`。
+#    （不是 `0 8`——那是 UTC 8 点 = 北京时间 16 点。）
+# ② 可在 Actions 页手动触发（workflow_dispatch）。
+on:
+  schedule:
+    - cron: "8 0 * * *"
+  workflow_dispatch:
+
+# 允许推送到仓库（脚本会自动 commit）
+permissions:
+  contents: write
+
+# 同一时间只跑一个（手动触发时若定时任务正在跑，排队而不是并发）
+concurrency:
+  group: upgrade-upstream
+  cancel-in-progress: false
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          # 需要能推回 main
+          ref: ${{ github.ref_name }}
+
+      - name: 安装 pnpm
+        # 上游的 `prepare` 脚本要跑 `pnpm build:all`，没有 pnpm 会装不上。
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: 启用 corepack
+        run: corepack enable
+
+      - name: 配置 git 身份
+        # ⚠️ 不配的话 commit 会署名 `github-actions[bot] <41898282+…@users.noreply.github.com>`
+        #    —— 那是「平台账号」，在提交历史里既不显眼也不好看。
+        #    这里用一个**明确的机器人身份**，一眼能看出这是自动升级干的。
+        run: |
+          git config user.name "upgrade-bot"
+          git config user.email "upgrade-bot@users.noreply.github.com"
+
+      - name: 安装依赖
+        run: npm install --include=dev --no-audit --no-fund
+
+      - name: 运行上游升级脚本
+        id: upgrade
+        # ⚠️ 脚本失败会**非零退出** ⇒ 这一步红 ⇒ workflow 失败 ⇒ 触发失败通知（邮件）。
+        #    **不要**写 `|| true`，否则失败会被吞掉，你收不到邮件。
+        run: node scripts/upgrade-upstream.mjs
+
+      - name: 推送改动
+        # ⚠️ **只有真的改了东西才推**。脚本在上游没有新 commit 时会直接跳过，
+        #    这时工作区没有任何改动，`git push` 会报「nothing to commit」。
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "上游没有更新，无需推送。"
+            exit 0
+          fi
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: 汇总失败原因
+        # 失败时把要点写进 Actions 的 Summary 页面，邮件里也能看到摘要。
+        if: failure()
+        run: |
+          {
+            echo "## ❌ 上游升级失败"
+            echo ""
+            echo "请到 Actions 日志里看具体报错。常见原因："
+            echo ""
+            echo "- 上游改了端点路径 / 装配方式（契约漂移）→ 看 \`src/upstream.js\` 顶部契约表"
+            echo "- 上游引入了新的外部依赖 → 在 \`web/admin.jsx\` 的 \`captured.factory()\` 里补模块"
+            echo "- 上游删除了某个渠道 → 更新 \`tests/host.test.mjs\` 的 \`EXPECTED_PROVIDERS\`"
+            echo ""
+            echo "回滚：\`git revert\` 掉自动升级那个 commit 即可（依赖与产物都在同一个 commit 里）。"
+          } >> "$GITHUB_STEP_SUMMARY"

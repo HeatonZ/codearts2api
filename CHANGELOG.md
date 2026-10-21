@@ -7,6 +7,53 @@
 ---
 
 <details open>
+<summary><b>2026-10-21 · 上游升级脚本化：每日自动升级 + 测试去硬编码 + README 面向用户</b></summary>
+
+## 上游升级自动化
+
+新增 [`scripts/upgrade-upstream.mjs`](scripts/upgrade-upstream.mjs) 与
+[`.github/workflows/upgrade-upstream.yml`](.github/workflows/upgrade-upstream.yml)：
+上游升级从「每次手工来一遍」变成**每天自动跑一次**。
+
+- **定时**：每天**北京时间 08:08**（cron 写 `8 0 * * *` —— GitHub 用 UTC 且按小时错开）；
+  也可在 Actions 页**手动触发**。
+- **上游 hash 没变就跳过**：不装、不构建、不改文件、不提交，工作区一个字节都不动。
+- **有更新则**跑完整链路：改 `package.json` → `npm install` → 核对 lock 的 `resolved`
+  → `npm run build` → `npm test` / `lint` / `format:check` → 把上游这一段的
+  **commit 标题**（只取标题，不取正文）写进 `CHANGELOG.md` → 自动 `git commit`。
+- **失败即失败**：任何一步非零退出，workflow 变红 ⇒ GitHub 发失败通知邮件，
+  失败原因还会写进 Actions 的 Summary。
+- **不会留下半成品**：依赖装不上会**回滚** `package.json` 与 `package-lock.json`；
+  测试不过就**不提交**。另有一道自检 —— 两个文件的 hash 不一致时直接报错退出
+  （那是从前一次失败中留下的状态，会导致此后永远「误判无更新」而卡住不再升级）。
+- 提交身份为 `upgrade-bot <upgrade-bot@users.noreply.github.com>`。
+
+## 测试与文档去硬编码（上游新增渠道从此零改动）
+
+此前 provider 名单是**双向**断言、且断言了渠道总数与导航文案 —— 上游每加一个渠道，
+本仓库都得跟着改一次。这是自动化最大的噪音源，故改为：
+
+- `tests/host.test.mjs`：`EXPECTED_PROVIDERS` 改为**单向**断言「期望 ⊆ 实际」——
+  **只防删、不防增**。上游新增渠道不再让测试变红；删除或改名已有渠道仍会红
+  （那是契约破坏，必须有人看一眼）。
+- `tests/admin-ui.test.mjs`：去掉渠道文案名单与导航总数断言，只断言「渲染出了多个渠道
+  入口 + 聚合面板存在 + 按钮无空文案」。
+- `README.md`：三处「N 个渠道」改为不写死。
+
+## 其他
+
+- **Docker 基础镜像升到 `node:24-slim`**（原 `node:22-slim`）。
+- **Prettier 改 `endOfLine: "auto"`**：本机是 Windows 且 Git 配了 `core.autocrlf=true`，
+  工作区被检成 CRLF，而 Prettier 默认要 LF ⇒ 一批**本来没动过**的文件也报格式错误。
+  `endOfLine: "auto"` 让它跟随文件自身行尾，根治了 README 里记的那个「行尾陷阱」。
+  （CI 是 Linux runner、检出即 LF，不受此影响；Docker 构建只跑 `npm install` 与
+  `npm run build`，**不跑**格式检查，同样不受影响。）
+- **README 重写**：面向使用者 —— 去掉折叠块，把「架构 / 开发 / 升级流程」等开发者内容
+  归到独立章节，主线只留「装什么、怎么用、怎么部署、出问题怎么办」。
+
+</details>
+
+<details>
 <summary><b>2026-10-21 · 上游升级 <code>78dc506</code>：新增 AutoClaw 国际版（第 21 个渠道）、窄屏适配</b></summary>
 
 ## 上游升级
