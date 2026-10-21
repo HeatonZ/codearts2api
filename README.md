@@ -292,14 +292,19 @@ docker exec codearts2api cat /data/admin-key
 #### GHCR 预构建镜像
 
 仓库启用 GitHub Actions 后，`Publish image` 工作流会发布 `linux/amd64` 与
-`linux/arm64` 镜像到 `ghcr.io/<owner>/<repository>`（仓库路径自动转为小写，fork 无需改配置）。
-将下面的 `owner/repository` 替换为实际仓库路径即可运行：
+`linux/arm64` 镜像到
+[`ghcr.io/zhuweiyou/codearts2api`](https://github.com/zhuweiyou/codearts2api/pkgs/container/codearts2api)
+（仓库路径自动转为小写，fork 无需改配置）。各标签、各架构的拉取命令也可以直接在
+上面那个包页面的 **Installation** 标签页里复制。
 
 ```bash
+# 拉取最新镜像（latest 始终跟随默认分支的最新一次成功发布）
+docker pull ghcr.io/zhuweiyou/codearts2api:latest
+
 docker run -d --name codearts2api \
   -p 8080:8080 \
   -v codearts2api-data:/data \
-  ghcr.io/owner/repository:latest
+  ghcr.io/zhuweiyou/codearts2api:latest
 ```
 
 | 触发方式                    | 镜像标签与行为                                               |
