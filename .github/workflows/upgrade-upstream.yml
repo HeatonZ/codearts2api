@@ -30,6 +30,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
+    # ⚠️ **job 级**设置（不是 step 级）：pnpm 11 的「新包冷却期」默认拒绝装发布不足
+    #    24 小时的包，而上游会把它刚发布的 DSH 基础包写进自己的 lockfile ⇒
+    #    上游 prepare 阶段失败（`The lockfile contains entries that the active
+    #    policies reject …`）。上游每次发版后约 24 小时内都会这样。
+    #
+    #    必须是 **job 级**：脚本内部也会调 `npm install`（升级时重装依赖），
+    #    step 级的 env 传不进去。只有这个**环境变量**能穿透到 npm 拉起的 pnpm
+    #    子进程（`.npmrc` 与 `npm_config_*` 均无效）。
+    env:
+      PNPM_CONFIG_MINIMUM_RELEASE_AGE: "0"
+
     steps:
       - name: 检出代码
         # ⚠️ **v7**：v5 起改用 Node 24 runtime，v4 还挂在已被弃用的 Node 20 上，
@@ -38,6 +49,9 @@ jobs:
         with:
           # 需要能推回 main
           ref: ${{ github.ref_name }}
+          # 把 GITHUB_TOKEN 写进本地 git 配置，后面 `git push` 直接可用。
+          # （这是 checkout 的默认行为，这里写出来是为了让人一眼看到推送凭据从哪来。）
+          persist-credentials: true
 
       - name: 安装 pnpm
         # 上游的 `prepare` 脚本要跑 `pnpm build:all`，没有 pnpm 会装不上。
@@ -48,15 +62,9 @@ jobs:
         with:
           version: 11
 
-      - name: 配置 git 身份
-        # ⚠️ 不配的话 commit 会署名 `github-actions[bot] <41898282+…@users.noreply.github.com>`
-        #    —— 那是「平台账号」，在提交历史里既不显眼也不好看。
-        #    这里用一个**明确的机器人身份**，一眼能看出这是自动升级干的。
-        run: |
-          git config user.name "upgrade-bot"
-          git config user.email "upgrade-bot@users.noreply.github.com"
-
       - name: 安装依赖
+        # `PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` 在上面的 **job 级 env** 里设置
+        # （它也要覆盖脚本内部的那次 `npm install`，所以不能只设在本步）。
         run: npm install --include=dev --no-audit --no-fund
 
       - name: 运行上游升级脚本

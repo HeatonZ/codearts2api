@@ -295,6 +295,17 @@ try {
   log("npm install（会 clone 上游并现场编译它的 lib/，可能要几分钟）…")
   run("npm", ["install", `${DEP_NAME}@${newSpec}`, "--include=dev", "--no-audit", "--no-fund"], {
     stdio: ["ignore", "inherit", "inherit"],
+    // ⚠️ **pnpm 11 的「新包冷却期」必须放行**：它默认拒绝装发布不足 24 小时的包，
+    //    而上游会把它**刚发布**的 DSH 基础包（`@deepseek-ai/dsh-*`）写进自己的
+    //    `pnpm-lock.yaml` ⇒ 上游 prepare 阶段直接失败：
+    //    `The lockfile contains entries that the active policies reject …`。
+    //    上游每次发版后约 24 小时内都会这样。
+    //
+    //    这里**自己带上**这个环境变量，而不是指望调用方（CI 的 job env、本机的
+    //    shell）设好了 —— 否则「本机能装、CI 装不上」这类差异极难排查。
+    //    只有这个**环境变量**能穿透到 npm 拉起的 pnpm 子进程（`.npmrc` 与
+    //    `npm_config_*` 均无效）。
+    env: { ...process.env, PNPM_CONFIG_MINIMUM_RELEASE_AGE: "0" },
   })
 } catch (error) {
   restoreManifests()
