@@ -7,11 +7,13 @@
 ---
 
 <details open>
-<summary><b>2026-10-21 · 上游升级 <code>5aca46a</code>（gitee master，CodeArts 上下文窗口改正）</b></summary>
+<summary><b>2026-10-21 · 上游升级 <code>ec2667f</code>（gitee master，CodeArts 上下文窗口改正）</b></summary>
 
 ## 上游升级
 
-依赖从 `6b437fdb1062aac9225800210d56a1437538f855` 更新到 `5aca46ac3811c92992f0926f8cf01b478e0d896e`（53 个提交 / 38 个非 merge，13 个文件 +624 −1030）。
+依赖从 `6b437fdb1062aac9225800210d56a1437538f855` 更新到 `ec2667f3cb32449947bf55a2e509f6793a3c104c`（53 个提交 / 38 个非 merge，13 个文件 +624 −1030）。
+
+> ⚠️ **gitee 的 master 会被反复 rebase/force-push**：本次同步期间它连续改写了两次历史（`5aca46a` 与 `ec2667f` 树完全相同，只是 SHA 不同）。旧的 pin SHA 因此会变成「不可达提交」，CI 里 `npm install` 报 `fatal: reference is not a tree` 就是这么来的。遇到这个报错不要以为是网络问题 —— `git ls-remote origin refs/heads/master` 取当前 SHA 重新提 pin 即可。
 
 > ⚠️ gitee 侧把历史改写过：`6b437fd` **不再是新 master 的祖先**。所以本次是「按内容比」而不是按提交祖先比 —— 渠道集合（`provider-registry` 的 22 个 id）逐一比对完全一致，差异只在下面这些文件。
 
