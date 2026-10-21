@@ -1,10 +1,8 @@
 name: Publish image
 
 on:
-  push:
-    branches: ["**"]
-    tags: ["v*"]
-  pull_request:
+  # ⚠️ 本仓库已关闭自动触发：版本发布走本仓库自己的 build-image.yml
+  #    （v* tag 发版本号、main 发 latest+sha）。保留本文件仅为必要时手动调用。
   workflow_dispatch:
   workflow_call:
     inputs:

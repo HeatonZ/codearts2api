@@ -8,8 +8,10 @@ name: 升级上游依赖
 #    （不是 `0 8`——那是 UTC 8 点 = 北京时间 16 点。）
 # ② 可在 Actions 页手动触发（workflow_dispatch）。
 on:
-  schedule:
-    - cron: "8 0 * * *"
+  # ⚠️ 本仓库已关闭定时触发：每日自动升级会自动改 pin 并推送 main，
+  #    与本仓库「人工同步 + 构建期补丁」的发布节奏冲突。需要时在 Actions 页手动跑。
+  # schedule:
+  #   - cron: "8 0 * * *"
   workflow_dispatch:
 
 # 允许推送到仓库（脚本会自动 commit）
