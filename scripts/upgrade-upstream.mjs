@@ -483,10 +483,6 @@ try {
     "",
     "由 scripts/upgrade-upstream.mjs 自动生成。",
   ].join("\n")
-  // 用**机器人身份**提交，与 GitHub Actions 里的配置保持一致 —— 免得本机跑出来的
-  // commit 和 CI 跑出来的署名不一样。
-  run("git", ["config", "user.name", BOT_NAME], { stdio: "ignore" })
-  run("git", ["config", "user.email", BOT_EMAIL], { stdio: "ignore" })
   // ⚠️ commit message 必须走 **`-F 文件`**，不能用 `-m "多行文本"`：
   //    多行 message 里有换行与中文，交给任何一层做引号处理都容易出错 ——
   //    早期版本用 `shell: true` + `-m`，shell 把多行 message 按换行拆成多个参数，
@@ -495,7 +491,14 @@ try {
   const messageFile = join(root, ".upgrade-commit-msg.tmp")
   writeFileSync(messageFile, message, "utf8")
   try {
-    run("git", ["commit", "-F", messageFile], { stdio: ["ignore", "inherit", "inherit"] })
+    // ⚠️ **用 `git -c user.name=… -c user.email=…` 只给这一次提交指定身份**，
+    //    **绝不**用 `git config user.name …` —— 那会**永久改掉仓库级配置**，
+    //    于是你本机之后所有真人提交都会署名成机器人（这个坑踩过）。
+    //
+    //    `-c` 是「本次命令临时覆盖」，不写盘、跑完就没了；仓库与全局配置都不受影响。
+    run("git", ["-c", `user.name=${BOT_NAME}`, "-c", `user.email=${BOT_EMAIL}`, "commit", "-F", messageFile], {
+      stdio: ["ignore", "inherit", "inherit"],
+    })
   } finally {
     removeFile(messageFile)
   }
