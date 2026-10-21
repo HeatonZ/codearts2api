@@ -35,6 +35,13 @@
 - 构建期补丁无需改动：`5aca46a` 的 `opencode-rpc.ts` 仍是 `KEY_PATTERN = /^sk-[A-Za-z0-9_-]{20,}$/` 与 `OPENCODE_ACCOUNT_${tail.toUpperCase()}`，两处改写照旧命中
 - `/admin` 宿主桩无需改动：客户端插件的 `ctx.*` 成员集合与上一版完全一致（仍含 `inject`）
 
+### 验证（CI）
+
+- `verify` 作业（新增的闸门）：镜像内 `npm test` **41 / 41 通过，0 失败**；`patch-upstream` 两处均 `patched`（`opencode-rpc.js` 的 key 判据 + client hint）
+- `build-and-push` 随后成功，发布 `:413072f` 与 `:latest`
+- 首次尝试（pin `5aca46a`）在 verify 阶段失败：`fatal: reference is not a tree` —— 即上面那条 gitee force-push 导致 pin 失效，改钉 `ec2667f` 后通过
+
+
 
 </details>
 
