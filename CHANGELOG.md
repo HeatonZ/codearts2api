@@ -7,6 +7,55 @@
 ---
 
 <details open>
+<summary><b>2026-10-21 · 上游升级 <code>b0940ca</code>（自动升级）</b></summary>
+
+## 上游升级
+
+依赖从 `78dc506cf42bb1821a20cd4378f2b81cd8de8ded` 更新到 `b0940cace56c9da9e0467a96c60b5fa4a358a20a`。
+
+### 上游改动
+
+- fix(pii): 事故手机号真正闭环 —— 从守卫自证断言与白名单里清掉真实号码
+- test(pii): 守卫补四条凭据判据 + 扫进 tests/ —— 修「守卫全绿却没保护住真凭据」
+- fix(tencent-fingerprint): DSH 身份首句换官方同形措辞 + 落地两站探针（修 4 个探针缺陷）
+- test(pii): 补三条「真实凭据」形态判据 —— PEM 私钥 / sk- 密钥 / JWT
+- fix(test): 跟上宿主 claimStyles 新签名 —— 修「对拍用例被静默 skip」的既有失败
+- fix(model-center): 修三处真缺陷 + 补 mounted 复位 —— 筛选归零 / 搜索命中被藏 / 全关按钮恒不禁用
+- fix(build): prepare 内联真实命令 —— 不再依赖任何包管理器（pnpm 10/11 上安装必失败）
+- fix(jet-hub): 模型级「全关」不再连带关掉整个供应商 + 独立池判据收敛为一份
+- fix(credits): 独立池不进分档也不进聚合折算 —— 修前后端口径分叉
+- fix(codearts): 目录倍率补 bareName + 转仓内口径「x{n}」—— 修聚合挑不到 codearts
+- test(credit-expiry): 合并 !134 后补 exclusivePoolRemaining 字段 —— 修 3 条全等断言变红
+- fix(raccoon): 图片能力改判「默认支持 + 纯文本黑名单」—— 修同族新模型 -1017 又被判 text
+- docs: 登记 client 的哨兵兜底缺口 + 两轮审计报告
+- fix(autoclaw): 订正 zai_glm-5.3-flash 的 isFree 失实标记
+- fix(pii): 脱敏 master 遗留的真实手机号
+- feat(autoclaw): 补永久锁开关 + 修降级误报 + 文案订正
+- test(守卫): 补三处零覆盖 + 修两条新守卫的无牙判据
+- fix(文案): Qoder / AStudio 锁定文案与代码行为相反
+- fix(分档): deductionEndTime 判据改 Number() + 挡住两格类型污染
+- fix(astudio): reportPickedAccount 改 true —— 原 false 让 reportAccount 成为死接线
+- docs(AGENTS): 记 lib/ 陈旧会让端到端验证验证到旧代码
+- docs(astudio): 如实登记时区未验证项 + 订正 replace(' ','T') 的真实必要性
+- fix(qoder): 永久哨兵在「两条支路」上都必须拦截
+- test(astudio): 锁「同一语义两处渲染必须同步」—— 防独立池标注再次漏改
+- fix(astudio): 徽标弹窗也标注独立池 —— 同一语义的第二处渲染漏改
+- fix(astudio): 独立池（星火积分）单独标注 —— 不再混进「永久」桶冒充通用积分
+- fix(astudio): 资源包分桶整条不渲染 —— 到期判据绕过 packageExpiryMs + windowDays 未回传
+- feat(codearts): 目录显示消耗倍率（含错峰档），修两处静默丢字段
+- fix(build): `prepare` 不再依赖全局 pnpm —— 没有 pnpm 的机器也能安装/更新本插件
+- docs(audit): 补 PR131（Qoder 三档分档 + 锁定永久积分）审计记录
+- feat(qoder): 补永久/长期/临期三档分档 + 锁定永久积分
+- feat(codearts): 套餐周期转临期 + 赠送包「即将到期」拆到逐包，三档合计恒等于 total
+- feat(codearts): 显示「其中 N 即将到期」—— 上游只下发聚合标量，做不出三档分档
+- feat(jet-hub): 供应商弹窗增加「模型列表」统一管理屏
+- feat(minimax): 补永久/长期/临期三档分档 + 锁定永久积分
+- fix(astudio): PR 自查三处修正（失效文件引用 / 迁就测试的顺序 / 断言越界）
+- feat(astudio): 补永久/长期/临期三档分档 + 锁定永久积分
+
+</details>
+
+<details>
 <summary><b>2026-10-21 · 上游升级脚本化：每日自动升级 + 测试去硬编码 + README 面向用户</b></summary>
 
 ## 上游升级自动化
